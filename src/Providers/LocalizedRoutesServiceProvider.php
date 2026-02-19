@@ -71,11 +71,51 @@ final class LocalizedRoutesServiceProvider extends ServiceProvider
         IlluminateRoute::macro('localized', function (array $translations): IlluminateRoute {
             /** @var IlluminateRoute $this */
             $action = $this->getAction();
-            $action[(string) config('wayfinder-locales.action_key', 'wayfinder_locales')] = [
+            $actionKey = (string) config('wayfinder-locales.action_key', 'wayfinder_locales');
+            $action[$actionKey] = [
                 'translations' => $translations,
             ];
 
-            return $this->setAction($action);
+            $this->setAction($action);
+
+            $hideDefault = (bool) config('wayfinder-locales.hide_default_prefix', false);
+            $defaultLocale = config('wayfinder-locales.default_locale');
+            $localeParameter = (string) config('wayfinder-locales.locale_parameter', 'locale');
+
+            if ($hideDefault && is_string($defaultLocale) && $defaultLocale !== '') {
+                $uri = $this->uri();
+                $requiredPlaceholder = '{'.$localeParameter.'}';
+                $optionalPlaceholder = '{'.$localeParameter.'?}';
+
+                $segments = explode('/', trim($uri, '/'));
+                $stripped = array_values(array_filter(
+                    $segments,
+                    static fn (string $s): bool => $s !== $requiredPlaceholder && $s !== $optionalPlaceholder,
+                ));
+
+                $unprefixedUri = implode('/', $stripped);
+
+                /** @var Router $router */
+                $router = app(Router::class);
+
+                $methods = $this->methods();
+                $routeAction = $this->getAction();
+
+                unset($routeAction['as']);
+
+                $defaultRoute = $router->addRoute($methods, $unprefixedUri, $routeAction);
+                $defaultRoute->defaults($localeParameter, $defaultLocale);
+
+                if ($this->getName() !== null) {
+                    $defaultRoute->name($this->getName().'.default');
+                }
+
+                foreach ($this->excludedMiddleware() as $middleware) {
+                    $defaultRoute->withoutMiddleware($middleware);
+                }
+            }
+
+            return $this;
         });
     }
 }

@@ -17,6 +17,10 @@ return [
     // Used when route locale is optional and not provided
     'default_locale' => env('WAYFINDER_DEFAULT_LOCALE', null),
 
+    // When true, the default locale's routes omit the {locale} prefix.
+    // e.g. /products instead of /en/products (requires default_locale to be set)
+    'hide_default_prefix' => env('WAYFINDER_HIDE_DEFAULT_PREFIX', false),
+
     // Throw on invalid metadata during generation
     'strict' => env('WAYFINDER_LOCALES_STRICT', true),
 ];

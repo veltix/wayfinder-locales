@@ -20,8 +20,7 @@ final readonly class LocaleRouteMetadata
         public array $translations,
         public array $localizedUris,
         public string $mode,
-    ) {
-    }
+    ) {}
 
     public function hasLocale(string $locale): bool
     {

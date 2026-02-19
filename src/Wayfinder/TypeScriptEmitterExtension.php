@@ -16,9 +16,7 @@ final class TypeScriptEmitterExtension
      */
     private array $metadataByRouteKey = [];
 
-    public function __construct(private readonly Repository $config)
-    {
-    }
+    public function __construct(private readonly Repository $config) {}
 
     public function register(RangerRoute $route, LocaleRouteMetadata $metadata): void
     {

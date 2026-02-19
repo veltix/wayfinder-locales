@@ -16,8 +16,7 @@ final class LocaleRouteResolver
     public function __construct(
         private readonly Router $router,
         private readonly Repository $config,
-    ) {
-    }
+    ) {}
 
     public function resolveForRangerRoute(RangerRoute $rangerRoute): ?LocaleRouteMetadata
     {
@@ -187,12 +186,20 @@ final class LocaleRouteResolver
             return [];
         }
 
+        $hideDefault = $this->hideDefaultPrefix();
+        $defaultLocale = $this->defaultLocale();
+
         $output = [];
 
         foreach ($translations as $locale => $translatedSegment) {
             $localized = $segments;
             $localized[$targetIndex] = $translatedSegment;
-            $output[$locale] = '/'.implode('/', $localized);
+
+            if ($hideDefault && $defaultLocale === $locale) {
+                $output[$locale] = '/'.implode('/', $this->stripLocaleSegment($localized, $localeParameter));
+            } else {
+                $output[$locale] = '/'.implode('/', $localized);
+            }
         }
 
         return $output;
@@ -219,6 +226,9 @@ final class LocaleRouteResolver
             static fn (string $segment): bool => str_starts_with($segment, '{') && str_ends_with($segment, '}'),
         ));
 
+        $hideDefault = $this->hideDefaultPrefix();
+        $defaultLocale = $this->defaultLocale();
+
         $output = [];
 
         foreach ($translations as $locale => $translatedTail) {
@@ -230,7 +240,12 @@ final class LocaleRouteResolver
                 $translatedSegments = [...$translatedSegments, ...$dynamicSuffix];
             }
 
-            $output[$locale] = '/'.implode('/', [...$prefix, ...$translatedSegments]);
+            if ($hideDefault && $defaultLocale === $locale) {
+                $prefixWithoutLocale = $this->stripLocaleSegment($prefix, $localeParameter);
+                $output[$locale] = '/'.implode('/', [...$prefixWithoutLocale, ...$translatedSegments]);
+            } else {
+                $output[$locale] = '/'.implode('/', [...$prefix, ...$translatedSegments]);
+            }
         }
 
         return $output;
@@ -298,5 +313,37 @@ final class LocaleRouteResolver
     private function actionKey(): string
     {
         return (string) $this->config->get('wayfinder-locales.action_key', 'wayfinder_locales');
+    }
+
+    private function hideDefaultPrefix(): bool
+    {
+        return (bool) $this->config->get('wayfinder-locales.hide_default_prefix', false)
+            && $this->defaultLocale() !== null;
+    }
+
+    private function defaultLocale(): ?string
+    {
+        $value = $this->config->get('wayfinder-locales.default_locale');
+
+        if (is_string($value) && $value !== '') {
+            return $value;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<string>  $segments
+     * @return list<string>
+     */
+    private function stripLocaleSegment(array $segments, string $localeParameter): array
+    {
+        $required = '{'.$localeParameter.'}';
+        $optional = '{'.$localeParameter.'?}';
+
+        return array_values(array_filter(
+            $segments,
+            static fn (string $segment): bool => $segment !== $required && $segment !== $optional,
+        ));
     }
 }
