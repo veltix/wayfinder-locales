@@ -320,13 +320,27 @@ export function initializeLocale(initial: Locale): void {
 export function switchLocale(target: Locale, localeUrls: Record<string, string>): void {
     if (target === current) return;
 
-    document.cookie = `locale=${target};path=/;max-age=${365 * 24 * 60 * 60};SameSite=Lax`;
+    // `document` is undefined during SSR — guard the cookie write. switchLocale
+    // is user-triggered so it runs client-side, but the guard keeps the module
+    // safe to import from server-rendered code.
+    if (typeof document !== "undefined") {
+        document.cookie = `locale=${target};path=/;max-age=${365 * 24 * 60 * 60};SameSite=Lax`;
+    }
+
     void loadLocale(target);
 
     const url = localeUrls[target];
     if (url) router.visit(url, { preserveScroll: true, preserveState: false });
 }
 ```
+
+> **SSR note:** if you run Inertia SSR, `document`/`window` don't exist on the server, so any
+> browser-only access (like the cookie write above) must be guarded with
+> `typeof document !== "undefined"`. `initializeLocale()` similarly registers a `router.on("navigate")`
+> listener that only fires in the browser — calling it from the SSR entry is harmless, but the cookie
+> and navigation effects only take hold client-side. To make the **first** server render pick the
+> right locale, rely on the request-side middleware (route → cookie → `Accept-Language`), not the
+> client cookie.
 
 Then call `initializeLocale()` in your app entry, reading the initial locale from
 `props.initialPage` (available in every adapter's `setup`):
