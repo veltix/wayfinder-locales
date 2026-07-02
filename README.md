@@ -96,7 +96,7 @@ routes are registered per locale, so `route:cache` keeps working.
 ### 4. Vite plugin
 
 ```ts
-import { wayfinderI18n } from "@veltix/vite-wayfinder-i18n";
+import { wayfinderI18n } from "@veltixjs/vite-wayfinder-i18n";
 
 export default defineConfig({
     plugins: [
