@@ -3,12 +3,21 @@
 namespace Veltix\WayfinderLocales;
 
 use Illuminate\Support\ServiceProvider;
+use Laravel\Wayfinder\Converters\Routes as WayfinderRoutesConverter;
+use Laravel\Wayfinder\Route as WayfinderRoute;
+use Veltix\WayfinderLocales\DevNext\Providers\LocalizedRoutesServiceProvider;
 use Veltix\WayfinderLocales\Middleware\SetLocale;
 
 class WayfinderI18nServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        if ($this->isDevNextWayfinder()) {
+            $this->app->register(LocalizedRoutesServiceProvider::class);
+
+            return;
+        }
+
         $this->mergeConfigFrom(__DIR__.'/../config/wayfinder-i18n.php', 'wayfinder-i18n');
 
         $this->registerLocaleAwareUrlGenerator();
@@ -16,6 +25,10 @@ class WayfinderI18nServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        if ($this->isDevNextWayfinder()) {
+            return;
+        }
+
         LocalizedRouteRegistrar::register();
 
         $this->app['router']->aliasMiddleware('setlocale', SetLocale::class);
@@ -30,6 +43,18 @@ class WayfinderI18nServiceProvider extends ServiceProvider
                 __DIR__.'/../config/wayfinder-i18n.php' => config_path('wayfinder-i18n.php'),
             ], 'wayfinder-i18n-config');
         }
+    }
+
+    /**
+     * The `next` branch of laravel/wayfinder generates via converter classes
+     * (and drops the stable `Laravel\Wayfinder\Route` wrapper). When present we
+     * defer to the dev-next integration, which extends the Routes converter and
+     * inherits its richer generation (models, enums, etc.).
+     */
+    private function isDevNextWayfinder(): bool
+    {
+        return ! class_exists(WayfinderRoute::class)
+            && class_exists(WayfinderRoutesConverter::class);
     }
 
     /**
