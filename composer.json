@@ -1,20 +1,28 @@
 {
     "name": "veltix/wayfinder-locales",
-    "description": "Multilingual route + translation generation extending Laravel Wayfinder.",
+    "description": "Localized route URLs and TypeScript translation catalogs for Laravel Wayfinder (next branch).",
     "type": "library",
-    "keywords": ["laravel", "wayfinder", "i18n", "typescript", "routes", "localization"],
+    "keywords": [
+        "laravel",
+        "wayfinder",
+        "i18n",
+        "typescript",
+        "routes",
+        "localization"
+    ],
     "license": "MIT",
     "require": {
         "php": "^8.2",
-        "laravel/wayfinder": "^0.1.14 || dev-next",
-        "illuminate/console": "^11.0|^12.0|^13.0",
-        "illuminate/filesystem": "^11.0|^12.0|^13.0",
-        "illuminate/routing": "^11.0|^12.0|^13.0",
-        "illuminate/support": "^11.0|^12.0|^13.0"
+        "illuminate/console": "^12.0|^13.0",
+        "illuminate/filesystem": "^12.0|^13.0",
+        "illuminate/routing": "^12.0|^13.0",
+        "illuminate/support": "^12.0|^13.0",
+        "laravel/ranger": "^0.2.4",
+        "laravel/wayfinder": "dev-next"
     },
     "require-dev": {
         "laravel/pint": "^1.29",
-        "orchestra/testbench": "^9.0|^10.0|^11.0"
+        "orchestra/testbench": "^10.1|^11.0"
     },
     "autoload": {
         "psr-4": {
@@ -32,7 +40,7 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Veltix\\WayfinderLocales\\WayfinderI18nServiceProvider"
+                "Veltix\\WayfinderLocales\\WayfinderLocalesServiceProvider"
             ]
         }
     },

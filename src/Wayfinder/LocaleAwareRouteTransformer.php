@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Veltix\WayfinderLocales\DevNext\Wayfinder;
+namespace Veltix\WayfinderLocales\Wayfinder;
 
 use Illuminate\Config\Repository;
 use Illuminate\Support\Collection;
@@ -14,7 +14,7 @@ use Laravel\Wayfinder\Converters\JsonData;
 use Laravel\Wayfinder\Converters\ResourceData;
 use Laravel\Wayfinder\Converters\Routes as BaseRoutes;
 use Laravel\Wayfinder\Langs\TypeScript\Converters\RouteMethod;
-use Veltix\WayfinderLocales\DevNext\Route\LocaleRouteResolver;
+use Veltix\WayfinderLocales\Route\LocaleRouteResolver;
 
 final class LocaleAwareRouteTransformer extends BaseRoutes
 {
@@ -59,6 +59,7 @@ final class LocaleAwareRouteTransformer extends BaseRoutes
         $method = $this->emitterExtension->makeRouteMethod(
             route: $route,
             withForm: $this->generateFormVariants(),
+            withInertiaComponent: $this->withInertiaComponent,
             named: false,
             relatedRoutes: [],
         );
@@ -73,6 +74,7 @@ final class LocaleAwareRouteTransformer extends BaseRoutes
         $method = $this->emitterExtension->makeRouteMethod(
             route: $route,
             withForm: $this->generateFormVariants(),
+            withInertiaComponent: $this->withInertiaComponent,
             named: true,
             relatedRoutes: [],
         );
@@ -96,6 +98,7 @@ final class LocaleAwareRouteTransformer extends BaseRoutes
         $method = $this->emitterExtension->makeRouteMethod(
             route: $routes->first(),
             withForm: $this->generateFormVariants(),
+            withInertiaComponent: $this->withInertiaComponent,
             named: false,
             relatedRoutes: $routes->all(),
         );

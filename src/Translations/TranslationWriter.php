@@ -11,7 +11,12 @@ use function Illuminate\Filesystem\join_paths;
  * Emits the lazy, code-split frontend translation output:
  *   translations/{locale}.ts  - one flat catalog module per locale (own chunk)
  *   translations/keys.ts       - TranslationKey union + TranslationReplacements
+ *   translations/locales.ts    - Locale union, locale list, active-locale store
  *   translations/index.ts      - t()/tChoice()/loadLocale() runtime + loader registry
+ *
+ * Everything lives under one directory the package owns end to end. Nothing is
+ * written into `resources/js/wayfinder`: that directory belongs to
+ * `wayfinder:generate`, which deletes any file there it did not write itself.
  */
 class TranslationWriter
 {
@@ -22,17 +27,12 @@ class TranslationWriter
     /**
      * @param  array{catalogs: array<string, array<string, string>>, keys: list<string>, replacements: array<string, list<string>>}  $collected
      * @param  list<string>  $locales
-     * @param  bool  $localeStoreInLocalesModule  Import getLocale() from
-     *                                            wayfinder/locales instead of
-     *                                            wayfinder/index (dev-next,
-     *                                            where index.ts is Wayfinder's).
      */
     public function write(
         string $dir,
         array $collected,
         array $locales,
         string $default,
-        bool $localeStoreInLocalesModule = false,
     ): void {
         $this->files->ensureDirectoryExists($dir);
 
@@ -48,11 +48,55 @@ class TranslationWriter
         $this->writeIfChanged($keysPath, $this->keysModule($collected['keys'], $collected['replacements']));
         $written[] = $keysPath;
 
+        $localesPath = join_paths($dir, 'locales.ts');
+        $this->writeIfChanged($localesPath, $this->localesModule($locales, $default));
+        $written[] = $localesPath;
+
         $indexPath = join_paths($dir, 'index.ts');
-        $this->writeIfChanged($indexPath, $this->indexModule($locales, $localeStoreInLocalesModule));
+        $this->writeIfChanged($indexPath, $this->indexModule($locales));
         $written[] = $indexPath;
 
         $this->prune($dir, $written);
+    }
+
+    /**
+     * The `Locale` union plus the active-locale store the runtime reads.
+     *
+     * On the `next` branch Wayfinder owns `wayfinder/index.ts` and exports no
+     * locale accessors, so the package ships its own here rather than patching
+     * a file it does not control.
+     *
+     * @param  list<string>  $locales
+     */
+    private function localesModule(array $locales, string $default): string
+    {
+        $union = $locales === []
+            ? 'string'
+            : implode(' | ', array_map(fn ($locale) => (string) Js::from($locale), $locales));
+
+        $list = implode(', ', array_map(fn ($locale) => (string) Js::from($locale), $locales));
+        $defaultValue = (string) Js::from($default);
+
+        return <<<TS
+        export type Locale = {$union};
+
+        export const locales: Locale[] = [{$list}];
+
+        export const defaultLocale: Locale = {$defaultValue};
+
+        let currentLocale: () => Locale | null = () => null;
+
+        /**
+         * Register the app's active locale, either as a value or as a getter
+         * re-read on every lookup (e.g. () => page.props.locale).
+         */
+        export const setLocale = (locale: Locale | (() => Locale | null)): void => {
+            currentLocale = typeof locale === "function" ? locale : () => locale;
+        };
+
+        export const getLocale = (): Locale | null => currentLocale();
+
+        TS;
     }
 
     /**
@@ -117,7 +161,7 @@ class TranslationWriter
     /**
      * @param  list<string>  $locales
      */
-    private function indexModule(array $locales, bool $localeStoreInLocalesModule = false): string
+    private function indexModule(array $locales): string
     {
         $loaderLines = implode("\n", array_map(
             fn ($locale) => '    '.Js::from($locale).': () => import('.Js::from('./'.$locale, JSON_UNESCAPED_SLASHES).'),',
@@ -126,21 +170,7 @@ class TranslationWriter
 
         $loaders = "{\n{$loaderLines}\n}";
 
-        return str_replace(
-            ['__IMPORTS__', '__LOADERS__'],
-            [$this->importBlock($localeStoreInLocalesModule), $loaders],
-            $this->runtime(),
-        );
-    }
-
-    private function importBlock(bool $localeStoreInLocalesModule): string
-    {
-        if ($localeStoreInLocalesModule) {
-            return 'import { defaultLocale, getLocale, type Locale } from "../wayfinder/locales";';
-        }
-
-        return 'import { getLocale } from "../wayfinder";'."\n"
-            .'import { defaultLocale, type Locale } from "../wayfinder/locales";';
+        return str_replace('__LOADERS__', $loaders, $this->runtime());
     }
 
     private function writeIfChanged(string $path, string $content): void
@@ -175,7 +205,7 @@ class TranslationWriter
     private function runtime(): string
     {
         return <<<'TS'
-        __IMPORTS__
+        import { defaultLocale, getLocale, type Locale } from "./locales";
         import type { TranslationKey, TranslationReplacements } from "./keys";
 
         export type Catalog = Partial<Record<TranslationKey, string>>;

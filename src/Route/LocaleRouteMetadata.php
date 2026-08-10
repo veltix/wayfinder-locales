@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Veltix\WayfinderLocales\DevNext\Route;
+namespace Veltix\WayfinderLocales\Route;
 
 final readonly class LocaleRouteMetadata
 {
