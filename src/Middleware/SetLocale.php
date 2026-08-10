@@ -27,7 +27,7 @@ class SetLocale
 
             $locale = $route->parameter($parameter) ?? ($route->defaults[$parameter] ?? null);
 
-            if (is_string($locale) && in_array($locale, (array) config('wayfinder-i18n.locales', []), true)) {
+            if (is_string($locale) && in_array($locale, (array) config('wayfinder-locales.locales', []), true)) {
                 app()->setLocale($locale);
             }
         }

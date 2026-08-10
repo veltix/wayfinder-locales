@@ -36,7 +36,7 @@ class GenerateLocalizedCommand extends Command
         $locales = $this->locales();
 
         if ($locales === []) {
-            $this->components->error('No locales configured. Set `wayfinder-i18n.locales`.');
+            $this->components->error('No locales configured. Set `wayfinder-locales.locales`.');
 
             return self::FAILURE;
         }
@@ -45,7 +45,7 @@ class GenerateLocalizedCommand extends Command
 
         if (! in_array($default, $locales, true)) {
             $this->components->warn(
-                "Default locale [{$default}] is not listed in wayfinder-i18n.locales ["
+                "Default locale [{$default}] is not listed in wayfinder-locales.locales ["
                 .implode(', ', $locales).'] — the generated translation keys will be empty.',
             );
         }
@@ -68,7 +68,7 @@ class GenerateLocalizedCommand extends Command
     private function locales(): array
     {
         return array_values(array_filter(
-            array_map('strval', (array) config('wayfinder-i18n.locales', [])),
+            array_map('strval', (array) config('wayfinder-locales.locales', [])),
             static fn (string $locale): bool => $locale !== '',
         ));
     }
@@ -79,7 +79,7 @@ class GenerateLocalizedCommand extends Command
      */
     private function defaultLocale(): string
     {
-        return (string) config('wayfinder-i18n.default', 'en');
+        return (string) config('wayfinder-locales.default_locale', 'en');
     }
 
     /**
@@ -91,7 +91,7 @@ class GenerateLocalizedCommand extends Command
     {
         return array_values(array_unique(array_map(
             'strval',
-            (array) config('wayfinder-i18n.exclude_groups', []),
+            (array) config('wayfinder-locales.exclude_groups', []),
         )));
     }
 
