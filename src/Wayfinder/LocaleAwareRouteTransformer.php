@@ -59,6 +59,7 @@ final class LocaleAwareRouteTransformer extends BaseRoutes
         $method = $this->emitterExtension->makeRouteMethod(
             route: $route,
             withForm: $this->generateFormVariants(),
+            withInertiaComponent: $this->withInertiaComponent,
             named: false,
             relatedRoutes: [],
         );
@@ -73,6 +74,7 @@ final class LocaleAwareRouteTransformer extends BaseRoutes
         $method = $this->emitterExtension->makeRouteMethod(
             route: $route,
             withForm: $this->generateFormVariants(),
+            withInertiaComponent: $this->withInertiaComponent,
             named: true,
             relatedRoutes: [],
         );
@@ -96,6 +98,7 @@ final class LocaleAwareRouteTransformer extends BaseRoutes
         $method = $this->emitterExtension->makeRouteMethod(
             route: $routes->first(),
             withForm: $this->generateFormVariants(),
+            withInertiaComponent: $this->withInertiaComponent,
             named: false,
             relatedRoutes: $routes->all(),
         );

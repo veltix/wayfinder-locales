@@ -26,6 +26,7 @@ final class TypeScriptEmitterExtension
     public function makeRouteMethod(
         RangerRoute $route,
         bool $withForm,
+        bool $withInertiaComponent = false,
         bool $named = false,
         array $relatedRoutes = [],
     ): RouteMethod {
@@ -35,6 +36,7 @@ final class TypeScriptEmitterExtension
             return new RouteMethod(
                 route: $route,
                 withForm: $withForm,
+                withInertiaComponent: $withInertiaComponent,
                 named: $named,
                 relatedRoutes: $relatedRoutes,
             );
@@ -43,6 +45,7 @@ final class TypeScriptEmitterExtension
         return new LocalizedRouteMethod(
             route: $route,
             withForm: $withForm,
+            withInertiaComponent: $withInertiaComponent,
             named: $named,
             relatedRoutes: $relatedRoutes,
             metadata: $metadata,

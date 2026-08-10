@@ -9,18 +9,30 @@ use Laravel\Wayfinder\Langs\TypeScript;
 use Laravel\Wayfinder\Langs\TypeScript\Converters\RouteMethod;
 use Veltix\WayfinderLocales\Route\LocaleRouteMetadata;
 
+/**
+ * Wayfinder's route method, plus a per-locale URL template table.
+ *
+ * Laravel serves one `{locale}`-parameterised URI, so Wayfinder would emit one
+ * `definition.url`. This picks the template matching the locale argument at
+ * call time, which is what makes `/de/produkte` come out of `products('de')`.
+ *
+ * Everything else is inherited and post-processed rather than copied: the base
+ * URL builder is ~140 lines of Wayfinder internals that move between releases,
+ * and a stale copy of them fails silently.
+ */
 final class LocalizedRouteMethod extends RouteMethod
 {
     public function __construct(
         Route $route,
         bool $withForm,
+        bool $withInertiaComponent = false,
         bool $named = false,
         array $relatedRoutes = [],
         bool $tmpMethod = false,
         private readonly ?LocaleRouteMetadata $metadata = null,
         private readonly ?string $defaultLocale = null,
     ) {
-        parent::__construct($route, $withForm, $named, $relatedRoutes, $tmpMethod);
+        parent::__construct($route, $withForm, $withInertiaComponent, $named, $relatedRoutes, $tmpMethod);
     }
 
     public function controllerMethod(): string
@@ -29,18 +41,18 @@ final class LocalizedRouteMethod extends RouteMethod
             return parent::controllerMethod();
         }
 
-        return implode(PHP_EOL.PHP_EOL, array_filter([
-            trim($this->localizedTemplateConstant()),
-            trim($this->base()),
-            trim($this->definition()),
-            trim($this->url()),
-            ...array_map('trim', $this->verbs()),
-            trim($this->formVariant()),
-            ...array_map('trim', $this->formVerbVariants()),
-            $this->withForm ? "{$this->name}.form = {$this->name}Form" : '',
-        ]));
+        return $this->localizedTemplateConstant().PHP_EOL.PHP_EOL.parent::controllerMethod();
     }
 
+    /**
+     * Narrow the locale argument from whatever was inferred for the route
+     * parameter to the locales the route actually declares.
+     *
+     * This one is a copy of the parent rather than a post-process: the argument
+     * types are builder objects, and there is no way to re-open one after the
+     * fact. LocalizedRouteEmitTest fails loudly if the parent's version moves
+     * out from under it.
+     */
     protected function collectArgTypes(): array
     {
         if ($this->metadata === null) {
@@ -54,15 +66,13 @@ final class LocalizedRouteMethod extends RouteMethod
         $typeObject = TypeScript::typeObject();
         $tuple = TypeScript::tuple();
 
-        $singleParamTypes = [];
-        $singleParamTypeObject = null;
+        $types = [];
+        $paramTypeObject = null;
 
         foreach ($this->route->parameters() as $parameter) {
-            $types = array_map(fn ($type) => TypeScript::fromSurveyorType($type), $parameter->types);
-
-            if ($parameter->name === $this->metadata->localeParameter) {
-                $types = [$this->metadata->localeUnionType()];
-            }
+            $types = $parameter->name === $this->metadata->localeParameter
+                ? [$this->metadata->localeUnionType()]
+                : array_map(fn ($type) => TypeScript::fromSurveyorType($type), $parameter->types);
 
             $baseTypes = $types;
 
@@ -70,23 +80,19 @@ final class LocalizedRouteMethod extends RouteMethod
                 $paramTypeObject = TypeScript::typeObject();
                 $paramTypeObject->key($parameter->key)->value(TypeScript::union($baseTypes));
                 $baseTypes[] = (string) $paramTypeObject;
-
-                $singleParamTypeObject = $paramTypeObject;
             }
 
             $tuple->item($baseTypes, TypeScript::safeMethod($parameter->name, 'Param'));
             $typeObject->key($parameter->name)->value(TypeScript::union($baseTypes))->optional($parameter->optional);
-
-            $singleParamTypes = $types;
         }
 
         $argTypes = [$typeObject, $tuple];
 
         if ($this->route->parameters()->count() === 1) {
-            array_push($argTypes, ...$singleParamTypes);
+            array_push($argTypes, ...$types);
 
-            if ($singleParamTypeObject !== null) {
-                $argTypes[] = $singleParamTypeObject;
+            if ($paramTypeObject !== null) {
+                $argTypes[] = $paramTypeObject;
             }
         }
 
@@ -95,147 +101,57 @@ final class LocalizedRouteMethod extends RouteMethod
 
     protected function url(): string
     {
-        if ($this->metadata === null) {
-            return parent::url();
+        $url = parent::url();
+
+        if ($this->metadata === null || ! $this->hasParameters) {
+            return $url;
         }
 
-        $func = TypeScript::arrowFunction();
+        $url = $this->fillOptionalLocale($url);
 
-        if ($this->hasParameters) {
-            $func->argument('args', $this->collectArgTypes(), $this->allOptional);
-        }
-
-        $func->argument('options', 'RouteQueryOptions', true);
-
-        $body = [];
-
-        if ($this->hasParameters) {
-            if ($this->route->parameters()->count() === 1) {
-                $body[] = <<<TS
-                if (typeof args === "string" || typeof args === "number") {
-                    args = { {$this->route->parameters()->first()->name}: args }
-                }
-                TS;
-
-                if ($this->route->parameters()->first()->key) {
-                    $body[] = <<<TS
-                    if (typeof args === "object" && !Array.isArray(args) && "{$this->route->parameters()->first()->key}" in args) {
-                        args = { {$this->route->parameters()->first()->name}: args.{$this->route->parameters()->first()->key} }
-                    }
-                    TS;
-                }
-            }
-
-            $argsArrayObject = TypeScript::object();
-
-            foreach ($this->route->parameters() as $i => $parameter) {
-                $argsArrayObject->key($parameter->name)->value("args[{$i}]");
-            }
-
-            $body[] = <<<TS
-            if (Array.isArray(args)) {
-                args = {$argsArrayObject}
-            }
-            TS;
-
-            $body[] = 'args = applyUrlDefaults(args)';
-
-            if ($this->metadata->localeOptional && $this->defaultLocale !== null) {
-                $body[] = sprintf(
-                    'if (args?.%s === undefined) { args = { ...(args ?? {}), %s: "%s" } }',
-                    $this->metadata->localeParameter,
-                    $this->metadata->localeParameter,
-                    $this->defaultLocale,
-                );
-            }
-
-            if ($this->route->parameters()->where('optional')->isNotEmpty()) {
-                $optionalParams = $this->route
-                    ->parameters()
-                    ->where('optional')
-                    ->pluck('name')
-                    ->toJson();
-
-                $body[] = "validateParameters(args, {$optionalParams})";
-            }
-
-            $parsedArgsObject = TypeScript::object();
-
-            foreach ($this->route->parameters() as $parameter) {
-                $keyVal = $parsedArgsObject->key($parameter->name);
-
-                if ($parameter->key) {
-                    $val = sprintf(
-                        'typeof args%s.%s === "object" ? args.%s.%s : args%s.%s',
-                        $this->allOptional ? '?' : '',
-                        $parameter->name,
-                        $parameter->name,
-                        $parameter->key ?? 'id',
-                        $this->allOptional ? '?' : '',
-                        $parameter->name,
-                    );
-                } else {
-                    $val = sprintf('args%s.%s', $this->allOptional ? '?' : '', $parameter->name);
-                }
-
-                if ($parameter->default !== null) {
-                    $val = sprintf('(%s) ?? "%s"', $val, $parameter->default);
-                }
-
-                $keyVal->value($val);
-            }
-
-            $body[] = (string) TypeScript::constant('parsedArgs', (string) $parsedArgsObject);
-        }
-
-        if ($this->hasParameters) {
-            $templateLocale = sprintf('parsedArgs.%s', $this->metadata->localeParameter);
-            $body[] = sprintf(
-                'const localizedTemplate = %s[%s] ?? %s.definition.url',
+        // The parent's `.replace()` chain and `queryParams()` suffix hang off
+        // this expression, so substituting it in place keeps all of them.
+        return str_replace(
+            "return {$this->name}.definition.url",
+            sprintf(
+                'return (%s[%s.%s] ?? %s.definition.url)',
                 $this->localizedTemplatesVariableName(),
-                $templateLocale,
+                $this->parsedArgsParam,
+                $this->metadata->localeParameter,
                 $this->name,
-            );
+            ),
+            $url,
+        );
+    }
+
+    /**
+     * An optional `{locale?}` may be omitted at the call site, which would
+     * index the template table with `undefined`. Default it first.
+     */
+    private function fillOptionalLocale(string $url): string
+    {
+        if (! $this->metadata->localeOptional || $this->defaultLocale === null) {
+            return $url;
         }
 
-        $return = $this->hasParameters
-            ? 'return localizedTemplate'
-            : "return {$this->name}.definition.url";
+        $anchor = "{$this->argsParam} = applyUrlDefaults({$this->argsParam})";
 
-        if ($this->hasParameters) {
-            $urlReplace = [];
+        $fill = sprintf(
+            'if (%s?.%s === undefined) { %s = { ...(%s ?? {}), %s: "%s" } }',
+            $this->argsParam,
+            $this->metadata->localeParameter,
+            $this->argsParam,
+            $this->argsParam,
+            $this->metadata->localeParameter,
+            $this->defaultLocale,
+        );
 
-            foreach ($this->route->parameters() as $parameter) {
-                $urlReplace[] = sprintf(
-                    '.replace("%s", parsedArgs.%s%s.toString()%s)',
-                    $parameter->placeholder,
-                    $parameter->name,
-                    $parameter->optional ? '?' : '',
-                    $parameter->optional ? ' ?? ""' : '',
-                );
-            }
-
-            $urlReplace[] = '.replace(/\/+$/, "")';
-
-            $urlReplace = implode(
-                PHP_EOL,
-                array_map(fn ($line) => TypeScript::indent($line), $urlReplace),
-            );
-
-            $return .= PHP_EOL.$urlReplace;
-        }
-
-        $return .= ' + queryParams(options)';
-
-        $body[] = $return;
-
-        $func->body($body);
-
-        $block = TypeScript::block("{$this->name}.url = {$func}");
-
-        $this->addDockblock($block);
-
-        return (string) $block;
+        return (string) preg_replace_callback(
+            '/^([ \t]*)'.preg_quote($anchor, '/').'$/m',
+            fn (array $matches): string => $matches[0].PHP_EOL.PHP_EOL.$matches[1].$fill,
+            $url,
+            1,
+        );
     }
 
     private function localizedTemplateConstant(): string
