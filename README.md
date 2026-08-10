@@ -601,6 +601,27 @@ preserved, and unused keys are reported but never removed. Segments handled by a
 Source segments are collected as routes register, so run it with **un-cached** routes
 (`php artisan route:clear` first if needed).
 
+### On `laravel/wayfinder: dev-next`
+
+The `next` branch of Wayfinder generates through converter classes and removed the stable
+`Laravel\Wayfinder\Route` wrapper, so this package hands **route and action** generation over to
+its DevNext integration (`Route::localized([...])`, configured in `config/wayfinder-locales.php`).
+
+**Translations are not route generation and still run on this line.** `wayfinder-i18n:generate`
+works as usual, but limits itself to the translation catalogs plus `wayfinder/locales.ts`:
+
+- Actions and routes are skipped with a notice — Wayfinder emits those itself.
+- `wayfinder/index.ts` is left alone; on this line Wayfinder owns that file. The active-locale
+  accessors (`setLocale()` / `getLocale()`) are emitted into `wayfinder/locales.ts` instead, and the
+  generated translation runtime imports them from there.
+- `config/wayfinder-i18n.php` is still merged and publishable — it carries `locales`, `default`,
+  `lang_file` and `exclude_groups`, none of which exist in `config/wayfinder-locales.php`.
+- If `wayfinder-locales.default_locale` is set, it wins over `wayfinder-i18n.default` so you only
+  declare your default locale once. Unset (the shipped default), `wayfinder-i18n.default` applies.
+- `wayfinder-i18n:sync-segments` is **not** registered here. It scaffolds stubs from segments
+  collected by the stable registrar; on this line localized paths are declared per route, so it
+  would have nothing to collect.
+
 ---
 
 ## License
