@@ -36,6 +36,10 @@
             ]
         }
     },
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "lint": "vendor/bin/pint"
+    },
     "minimum-stability": "stable",
     "prefer-stable": true,
     "config": {

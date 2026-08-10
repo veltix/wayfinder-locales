@@ -3,8 +3,6 @@
 namespace Veltix\WayfinderLocales;
 
 use Illuminate\Support\ServiceProvider;
-use Laravel\Wayfinder\Converters\Routes as WayfinderRoutesConverter;
-use Laravel\Wayfinder\Route as WayfinderRoute;
 use Veltix\WayfinderLocales\DevNext\Providers\LocalizedRoutesServiceProvider;
 use Veltix\WayfinderLocales\Middleware\SetLocale;
 
@@ -12,19 +10,23 @@ class WayfinderI18nServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // Merged on both lines: it carries `locales`/`default`, which the
+        // translation collector needs regardless of how routes are generated.
+        $this->mergeConfigFrom(__DIR__.'/../config/wayfinder-i18n.php', 'wayfinder-i18n');
+
         if ($this->isDevNextWayfinder()) {
             $this->app->register(LocalizedRoutesServiceProvider::class);
 
             return;
         }
 
-        $this->mergeConfigFrom(__DIR__.'/../config/wayfinder-i18n.php', 'wayfinder-i18n');
-
         $this->registerLocaleAwareUrlGenerator();
     }
 
     public function boot(): void
     {
+        $this->registerConsole();
+
         if ($this->isDevNextWayfinder()) {
             return;
         }
@@ -32,29 +34,43 @@ class WayfinderI18nServiceProvider extends ServiceProvider
         LocalizedRouteRegistrar::register();
 
         $this->app['router']->aliasMiddleware('setlocale', SetLocale::class);
+    }
 
-        if ($this->app->runningInConsole()) {
-            $this->commands([
-                GenerateLocalizedCommand::class,
-                SyncSegmentsCommand::class,
-            ]);
-
-            $this->publishes([
-                __DIR__.'/../config/wayfinder-i18n.php' => config_path('wayfinder-i18n.php'),
-            ], 'wayfinder-i18n-config');
+    /**
+     * Translation generation is orthogonal to route generation, so the
+     * generator and the publishable config are available on both lines.
+     *
+     * `sync-segments` is not: it scaffolds lang stubs from the segments
+     * collected by {@see LocalizedRouteRegistrar}, which only runs on the
+     * stable line. Under dev-next localized paths are declared per route via
+     * `Route::localized([...])`, so the registrar collects nothing and the
+     * command would always report "no localized route segments found".
+     */
+    private function registerConsole(): void
+    {
+        if (! $this->app->runningInConsole()) {
+            return;
         }
+
+        $this->commands(array_filter([
+            GenerateLocalizedCommand::class,
+            $this->isDevNextWayfinder() ? null : SyncSegmentsCommand::class,
+        ]));
+
+        $this->publishes([
+            __DIR__.'/../config/wayfinder-i18n.php' => config_path('wayfinder-i18n.php'),
+        ], 'wayfinder-i18n-config');
     }
 
     /**
      * The `next` branch of laravel/wayfinder generates via converter classes
      * (and drops the stable `Laravel\Wayfinder\Route` wrapper). When present we
-     * defer to the dev-next integration, which extends the Routes converter and
-     * inherits its richer generation (models, enums, etc.).
+     * defer ROUTE generation to the dev-next integration, which extends the
+     * Routes converter and inherits its richer generation (models, enums, etc.).
      */
     private function isDevNextWayfinder(): bool
     {
-        return ! class_exists(WayfinderRoute::class)
-            && class_exists(WayfinderRoutesConverter::class);
+        return WayfinderVariant::isDevNext();
     }
 
     /**

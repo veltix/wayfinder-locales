@@ -22,9 +22,18 @@ class TranslationWriter
     /**
      * @param  array{catalogs: array<string, array<string, string>>, keys: list<string>, replacements: array<string, list<string>>}  $collected
      * @param  list<string>  $locales
+     * @param  bool  $localeStoreInLocalesModule  Import getLocale() from
+     *                                            wayfinder/locales instead of
+     *                                            wayfinder/index (dev-next,
+     *                                            where index.ts is Wayfinder's).
      */
-    public function write(string $dir, array $collected, array $locales, string $default): void
-    {
+    public function write(
+        string $dir,
+        array $collected,
+        array $locales,
+        string $default,
+        bool $localeStoreInLocalesModule = false,
+    ): void {
         $this->files->ensureDirectoryExists($dir);
 
         $written = [];
@@ -40,7 +49,7 @@ class TranslationWriter
         $written[] = $keysPath;
 
         $indexPath = join_paths($dir, 'index.ts');
-        $this->writeIfChanged($indexPath, $this->indexModule($locales));
+        $this->writeIfChanged($indexPath, $this->indexModule($locales, $localeStoreInLocalesModule));
         $written[] = $indexPath;
 
         $this->prune($dir, $written);
@@ -74,13 +83,13 @@ class TranslationWriter
             : implode("\n    | ", array_map(fn ($key) => (string) Js::from($key), $keys));
 
         if ($keys === []) {
-            $keyType = "export type TranslationKey = string;";
+            $keyType = 'export type TranslationKey = string;';
         } else {
             $keyType = "export type TranslationKey =\n    | {$union};";
         }
 
         if ($replacements === []) {
-            $replacementsType = "export type TranslationReplacements = {};";
+            $replacementsType = 'export type TranslationReplacements = {};';
         } else {
             $lines = [];
 
@@ -108,7 +117,7 @@ class TranslationWriter
     /**
      * @param  list<string>  $locales
      */
-    private function indexModule(array $locales): string
+    private function indexModule(array $locales, bool $localeStoreInLocalesModule = false): string
     {
         $loaderLines = implode("\n", array_map(
             fn ($locale) => '    '.Js::from($locale).': () => import('.Js::from('./'.$locale, JSON_UNESCAPED_SLASHES).'),',
@@ -117,7 +126,21 @@ class TranslationWriter
 
         $loaders = "{\n{$loaderLines}\n}";
 
-        return str_replace('__LOADERS__', $loaders, $this->runtime());
+        return str_replace(
+            ['__IMPORTS__', '__LOADERS__'],
+            [$this->importBlock($localeStoreInLocalesModule), $loaders],
+            $this->runtime(),
+        );
+    }
+
+    private function importBlock(bool $localeStoreInLocalesModule): string
+    {
+        if ($localeStoreInLocalesModule) {
+            return 'import { defaultLocale, getLocale, type Locale } from "../wayfinder/locales";';
+        }
+
+        return 'import { getLocale } from "../wayfinder";'."\n"
+            .'import { defaultLocale, type Locale } from "../wayfinder/locales";';
     }
 
     private function writeIfChanged(string $path, string $content): void
@@ -152,8 +175,7 @@ class TranslationWriter
     private function runtime(): string
     {
         return <<<'TS'
-        import { getLocale } from "../wayfinder";
-        import { defaultLocale, type Locale } from "../wayfinder/locales";
+        __IMPORTS__
         import type { TranslationKey, TranslationReplacements } from "./keys";
 
         export type Catalog = Partial<Record<TranslationKey, string>>;
