@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Veltix\WayfinderLocales\DevNext\Wayfinder;
+namespace Veltix\WayfinderLocales\Wayfinder;
 
 use Laravel\Ranger\Components\Route;
 use Laravel\Wayfinder\Langs\TypeScript;
 use Laravel\Wayfinder\Langs\TypeScript\Converters\RouteMethod;
-use Veltix\WayfinderLocales\DevNext\Route\LocaleRouteMetadata;
+use Veltix\WayfinderLocales\Route\LocaleRouteMetadata;
 
 final class LocalizedRouteMethod extends RouteMethod
 {

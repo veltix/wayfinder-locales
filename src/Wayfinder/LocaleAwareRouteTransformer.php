@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Veltix\WayfinderLocales\DevNext\Wayfinder;
+namespace Veltix\WayfinderLocales\Wayfinder;
 
 use Illuminate\Config\Repository;
 use Illuminate\Support\Collection;
@@ -14,7 +14,7 @@ use Laravel\Wayfinder\Converters\JsonData;
 use Laravel\Wayfinder\Converters\ResourceData;
 use Laravel\Wayfinder\Converters\Routes as BaseRoutes;
 use Laravel\Wayfinder\Langs\TypeScript\Converters\RouteMethod;
-use Veltix\WayfinderLocales\DevNext\Route\LocaleRouteResolver;
+use Veltix\WayfinderLocales\Route\LocaleRouteResolver;
 
 final class LocaleAwareRouteTransformer extends BaseRoutes
 {
