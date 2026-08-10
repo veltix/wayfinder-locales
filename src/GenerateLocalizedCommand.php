@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Veltix\WayfinderLocales\Translations\TranslationCollector;
 use Veltix\WayfinderLocales\Translations\TranslationWriter;
+use Veltix\WayfinderLocales\Wayfinder\LocaleAwareRouteTransformer;
 
 use function Illuminate\Filesystem\join_paths;
 
@@ -18,7 +19,7 @@ use function Illuminate\Filesystem\join_paths;
  *
  * Routes and actions are NOT generated here — `wayfinder:generate` emits those,
  * with localized URL templates supplied by this package's
- * {@see \Veltix\WayfinderLocales\Wayfinder\LocaleAwareRouteTransformer}.
+ * {@see LocaleAwareRouteTransformer}.
  */
 class GenerateLocalizedCommand extends Command
 {
