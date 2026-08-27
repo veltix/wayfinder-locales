@@ -37,6 +37,10 @@ class InboundRoutingTest extends TestCase
             ->get('/{locale?}/products', fn () => app()->getLocale())
             ->name('products')
             ->localized(['en' => 'products', 'de' => 'produkte']);
+
+        // Never tagged with `.localized()` — stands in for Fortify's `login`,
+        // which `lroute()`'s docblock promises to leave unaffected.
+        $router->get('/login', fn () => 'login')->name('login');
     }
 
     #[Test]
@@ -57,6 +61,37 @@ class InboundRoutingTest extends TestCase
     public function it_matches_the_url_the_generator_emits_for_a_locale(): void
     {
         $this->get($this->resolvedUrlFor('products', 'de'))->assertOk()->assertSee('de');
+    }
+
+    /**
+     * Gap 3: `lroute()` used to fill the locale parameter into the base route's
+     * own URI (`/de/products`) instead of consulting the resolver, so it never
+     * agreed with what the client is told to visit. Comparing against
+     * `resolvedUrlFor()` — the same computation the generator uses — rather
+     * than a literal path keeps this from drifting silently if the translation
+     * map, the mode, or the segment ever change.
+     */
+    #[Test]
+    public function lroute_generates_the_same_translated_url_the_resolver_produces(): void
+    {
+        $this->assertSame(
+            $this->resolvedUrlFor('products', 'de'),
+            lroute('products', [], 'de', absolute: false),
+        );
+    }
+
+    /**
+     * The documented fallback: a route with no locale parameter has no
+     * `{name}.locale.{locale}` twin, so `lroute()` must fall through to
+     * `route()` unchanged instead of generating a broken name lookup.
+     */
+    #[Test]
+    public function lroute_leaves_a_route_without_a_locale_parameter_unchanged(): void
+    {
+        $this->assertSame(
+            route('login', [], false),
+            lroute('login', [], 'de', absolute: false),
+        );
     }
 
     private function resolvedUrlFor(string $routeName, string $locale): string

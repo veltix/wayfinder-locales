@@ -7,7 +7,9 @@ namespace Veltix\WayfinderLocales;
 use Illuminate\Config\Repository;
 use Illuminate\Routing\Route as IlluminateRoute;
 use Illuminate\Routing\Router;
+use Illuminate\Support\Collection;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Ranger\Components\Route as RangerRoute;
 use Laravel\Wayfinder\Converters\FormRequests;
 use Laravel\Wayfinder\Converters\InertiaData;
 use Laravel\Wayfinder\Converters\JsonApiData;
@@ -76,8 +78,16 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
     /**
      * `Route::localized(['en' => 'products', 'de' => 'produkte'])` tags a route
      * with its per-locale path segments. The tag is read back at generation
-     * time by {@see LocaleRouteResolver}; Laravel itself keeps serving the
-     * single `{locale}`-parameterised URI.
+     * time by {@see LocaleRouteResolver}, which is also reused here: for every
+     * locale whose resolved URI still carries the `{locale}`/`{locale?}`
+     * placeholder, a concrete twin route is registered — `/de/produkte` next to
+     * the original `/{locale}/produkte` — named `{name}.locale.{locale}`, with
+     * `locale` set as a route default so `SetLocale` picks it up unchanged and
+     * inbound requests match natively (`route:cache` included). The original
+     * `{locale}`-parameterised route is left registered: {@see
+     * LocaleRouteResolver} reads its `uri()` to detect the placeholder, and it
+     * is what `route('products')` keeps resolving through for callers that
+     * don't care about locale.
      */
     private function registerLocalizedRouteMacro(): void
     {
@@ -129,6 +139,58 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
 
                 foreach ($this->excludedMiddleware() as $middleware) {
                     $defaultRoute->withoutMiddleware($middleware);
+                }
+            }
+
+            /** @var Router $router */
+            $router = app(Router::class);
+
+            // `LocaleRouteResolver` looks routes up by name first. That lookup
+            // table is normally refreshed once, lazily, when the app finishes
+            // booting — but this macro runs while routes are still being
+            // registered, before that happens, so `$this`'s own name (already
+            // set by the time `.localized()` is chained on) would not resolve
+            // yet without forcing the refresh here.
+            $router->getRoutes()->refreshNameLookups();
+
+            /** @var LocaleRouteResolver $resolver */
+            $resolver = app(LocaleRouteResolver::class);
+
+            $metadata = $resolver->resolveForRangerRoute(new RangerRoute($this, new Collection, null, null));
+
+            if ($metadata !== null) {
+                $requiredPlaceholder = '{'.$localeParameter.'}';
+                $optionalPlaceholder = '{'.$localeParameter.'?}';
+                $methods = $this->methods();
+
+                foreach ($metadata->locales as $locale) {
+                    $template = $metadata->uriForLocale($locale);
+
+                    if ($template === null) {
+                        continue;
+                    }
+
+                    if (! str_contains($template, $requiredPlaceholder) && ! str_contains($template, $optionalPlaceholder)) {
+                        // No placeholder left to fill means this is the unprefixed
+                        // default-locale URI already registered above.
+                        continue;
+                    }
+
+                    $concreteUri = str_replace([$optionalPlaceholder, $requiredPlaceholder], $locale, $template);
+
+                    $routeAction = $this->getAction();
+                    unset($routeAction['as']);
+
+                    $localeRoute = $router->addRoute($methods, $concreteUri, $routeAction);
+                    $localeRoute->defaults($localeParameter, $locale);
+
+                    if ($this->getName() !== null) {
+                        $localeRoute->name($this->getName().'.locale.'.$locale);
+                    }
+
+                    foreach ($this->excludedMiddleware() as $middleware) {
+                        $localeRoute->withoutMiddleware($middleware);
+                    }
                 }
             }
 
