@@ -108,6 +108,11 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
 
             $this->setAction($action);
 
+            // Resolved once, up front, so both the unprefixed twin below and
+            // the per-locale loop further down read the same metadata instead
+            // of computing it twice (or drifting between two computations).
+            $metadata = app(LocaleRouteResolver::class)->resolveForRoute($this);
+
             $hideDefault = (bool) config('wayfinder-locales.hide_default_prefix', false);
             $defaultLocale = config('wayfinder-locales.default_locale');
             $localeParameter = (string) config('wayfinder-locales.locale_parameter', 'locale');
@@ -123,7 +128,21 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
                     static fn (string $s): bool => $s !== $requiredPlaceholder && $s !== $optionalPlaceholder,
                 ));
 
+                // The declared URI literal minus the placeholder is only a
+                // fallback, for the edge cases where the resolver can't
+                // produce metadata (generation disabled, malformed
+                // translations under non-strict mode, or a default locale
+                // that isn't in the translation map at all). Whenever the
+                // resolver *did* produce a translated segment for the
+                // default locale, that's the twin's real URI — the whole
+                // point of `localized()` is that the default locale can have
+                // its own translated segment too, not just every other one.
                 $unprefixedUri = implode('/', $stripped);
+                $translatedDefaultUri = $metadata?->uriForLocale($defaultLocale);
+
+                if ($translatedDefaultUri !== null) {
+                    $unprefixedUri = trim($translatedDefaultUri, '/');
+                }
 
                 /** @var Router $router */
                 $router = app(Router::class);
@@ -148,12 +167,10 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
             /** @var Router $router */
             $router = app(Router::class);
 
-            // `$this` is already the concrete route the metadata is about, so
-            // resolve directly from it — no need to route through the
-            // resolver's RangerRoute-wrapper lookup (name or URI based) just
-            // to hand back the same object.
-            $metadata = app(LocaleRouteResolver::class)->resolveForRoute($this);
-
+            // `$metadata` was already resolved directly from `$this` above —
+            // `$this` is the concrete route the metadata is about, so there's
+            // no need to route through the resolver's RangerRoute-wrapper
+            // lookup (name or URI based) just to hand back the same object.
             if ($metadata !== null) {
                 $requiredPlaceholder = '{'.$localeParameter.'}';
                 $optionalPlaceholder = '{'.$localeParameter.'?}';

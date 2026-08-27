@@ -52,7 +52,8 @@ class DefaultLocaleTest extends TestCase
 
     protected function defineRoutes($router): void
     {
-        $router->get('/{locale}/products', fn () => 'ok')
+        $router->middleware('setlocale')
+            ->get('/{locale}/products', fn () => app()->getLocale())
             ->name('products')
             ->localized(['en' => 'products', 'de' => 'produkte']);
     }
@@ -98,14 +99,74 @@ class DefaultLocaleTest extends TestCase
         $this->assertSame('/{locale}/products', $uris['en']);
     }
 
+    /**
+     * The bug this guards: the twin used to be built from the declared URI
+     * literal with the `{locale}` placeholder stripped, so it never consulted
+     * the translation map. With `default_locale => 'de'` and
+     * `['en' => 'products', 'de' => 'produkte']`, that served German at
+     * `/products` instead of `/produkte`.
+     */
     #[Test]
     public function the_default_locale_drives_the_unprefixed_route_registration(): void
     {
         $default = $this->app['router']->getRoutes()->getByName('products.default');
 
         $this->assertNotNull($default);
-        $this->assertSame('products', $default->uri());
+        $this->assertSame('produkte', $default->uri());
         $this->assertSame('de', $default->defaults['locale']);
+    }
+
+    /**
+     * The round trip: the unprefixed twin must actually serve the default
+     * locale's translated segment...
+     */
+    #[Test]
+    public function the_unprefixed_route_resolves_at_the_default_locales_translated_segment(): void
+    {
+        $this->get('/produkte')->assertOk()->assertSee('de');
+    }
+
+    /**
+     * ...and the old literal — what the twin used to be registered under —
+     * must stop resolving once the twin moves. Without this assertion, the
+     * test above would still pass if the twin were (incorrectly) registered
+     * under both `/produkte` and `/products`, which would leave a
+     * duplicate-content URL live on the site.
+     */
+    #[Test]
+    public function the_old_literal_no_longer_resolves_once_the_twin_moves(): void
+    {
+        $this->get('/products')->assertNotFound();
+    }
+
+    /**
+     * The common case, and the one the consuming app actually runs in
+     * production: when the default locale's segment happens to equal the
+     * declared literal, the fix must not move it. Registered here with a
+     * distinct route name against a temporarily-swapped default_locale, since
+     * the class-level fixture's default is 'de'.
+     */
+    #[Test]
+    public function the_unprefixed_route_is_unmoved_when_the_default_segment_equals_the_literal(): void
+    {
+        config()->set('wayfinder-locales.default_locale', 'en');
+
+        $this->app['router']->get('/{locale}/products', fn () => 'ok')
+            ->name('products.english_default')
+            ->localized(['en' => 'products', 'de' => 'produkte']);
+
+        // Routes named after being added to the collection (the twin is
+        // named this way, same as the route above it) only surface through
+        // `getByName()` once the name look-up table is rebuilt — Testbench
+        // does this itself after `defineRoutes()`, but a route registered
+        // mid-test has to trigger it explicitly.
+        $this->app['router']->getRoutes()->refreshNameLookups();
+
+        $default = $this->app['router']->getRoutes()->getByName('products.english_default.default');
+
+        $this->assertNotNull($default);
+        $this->assertSame('products', $default->uri());
+        $this->assertSame('en', $default->defaults['locale']);
     }
 
     #[Test]
