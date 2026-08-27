@@ -18,6 +18,8 @@ Both confirmed by running the code, not by reading the README.
 
 **The existing suite cannot see this.** `tests/SetLocaleMiddlewareTest.php:38` asserts `$this->get('/de/products')` — the *untranslated* path — is OK. It never requests `/de/produkte`. The suite tests the URI Laravel matches rather than the URI the package emits, so the two have never been compared.
 
+**Gap 3 — `lroute()` emits untranslated URLs.** Found during Task 1. `src/helpers.php:17-30` fills the locale *parameter* and delegates to `app('url')->route()`; it never consults `LocaleRouteResolver`. So `lroute('products', [], 'de')` returns `/de/products`, not `/de/produkte` — the server-side helper has the same blind spot as the router. Only the TypeScript generation path is locale-aware. This matters beyond tidiness: the consuming app's plan is to make its `LocalizedUrl` a façade over `lroute()`, which would have reproduced the very bug this work removes.
+
 **Gap 2 — the unprefixed twin uses the declared URI literal.** Probe with `default_locale = 'et'`:
 
 ```
@@ -107,16 +109,24 @@ If committing a red test conflicts with repo convention, mark them skipped with 
 Run: `vendor/bin/phpunit --filter InboundRoutingTest`
 Expected: PASS.
 
-- [ ] **Step 2: Keep the whole suite green**
+- [ ] **Step 2: Make `lroute()` locale-aware**
+
+`src/helpers.php`'s `lroute()` fills the locale parameter and calls `app('url')->route()`, so it emits `/de/products`. Once a route exists per locale, `lroute()` should resolve to **that locale's** route and return its translated URL.
+
+Add a test asserting `lroute('products', [], 'de')` returns the same string as the resolver's `uriForLocale('de')` — comparing the two generators against each other rather than against a hand-written path, so they cannot drift apart later.
+
+Keep its documented fallback intact: a route with **no** locale parameter (Fortify's `login`, say) must still generate unchanged. That behaviour is in the function's docblock and consumers rely on it.
+
+- [ ] **Step 3: Keep the whole suite green**
 
 Run: `vendor/bin/phpunit`
 Expected: at least 32 tests, 0 failures. `LocalizedRouteEmitTest` and `RegistrationTest` both inspect registered routes and are the most likely to notice a changed route table — if either needs updating, that is a signal about the public contract, so explain the change rather than just making it pass.
 
-- [ ] **Step 3: Prove it discriminates**
+- [ ] **Step 4: Prove it discriminates**
 
 Revert the per-locale registration, confirm `InboundRoutingTest` fails again, restore. Report the observed output.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 vendor/bin/pint
@@ -198,7 +208,7 @@ git commit -m "feat: allow default_locale to be resolved at runtime"
 
 - [ ] **Step 1: Write the matrix test**
 
-For a set of routes covering the shapes this package supports — required `{locale}`, optional `{locale?}`, a route with extra path segments after the localized one, a route with model-bound parameters, and `mode => 'tail'` as well as `'segment'` — assert for **every configured locale**: the generated URL is matched by the router, lands on the expected action, and sets `app()->getLocale()` to that locale.
+For a set of routes covering the shapes this package supports — required `{locale}`, optional `{locale?}`, a route with extra path segments after the localized one, a route with model-bound parameters, and `mode => 'tail'` as well as `'segment'` — assert for **every configured locale**: the generated URL is matched by the router, lands on the expected action, and sets `app()->getLocale()` to that locale. Assert it for **both** generators — the resolver's `uriForLocale()` (which the TypeScript output is built from) and `lroute()` (the server-side helper) — since Task 1 found they disagreed.
 
 Drive it from the route table rather than a hand-written list of paths, so a future route shape is covered without anyone remembering to add it.
 
@@ -225,7 +235,7 @@ git commit -m "test: pin round-trip symmetry across locales and route shapes"
 
 ## Self-Review
 
-**Spec coverage.** Gap 1 (no inbound matching) → Tasks 1, 2, 5. Gap 2 (twin uses the declared literal) → Task 3. `default_locale` as a resolver, which the consuming app needs for its shop setting → Task 4. The spec's acceptance property — round-trip symmetry — is Task 1's second test and Task 5's whole subject.
+**Spec coverage.** Gap 1 (no inbound matching) → Tasks 1, 2, 5. Gap 2 (twin uses the declared literal) → Task 3. Gap 3 (`lroute()` untranslated), found while writing Task 1's characterisation test → Task 2, and pinned against the other generator in Task 5. `default_locale` as a resolver, which the consuming app needs for its shop setting → Task 4. The spec's acceptance property — round-trip symmetry — is Task 1's second test and Task 5's whole subject.
 
 **Task 1 ships no implementation on purpose.** The defect has existed since the package's first release precisely because nothing compared what it generates against what it matches. Committing that comparison as a failing test first means the property is pinned by something that has been *observed* to fail, not merely asserted to pass.
 
