@@ -30,6 +30,21 @@ final class LocaleRouteResolver
             return null;
         }
 
+        return $this->resolveForRoute($route);
+    }
+
+    /**
+     * Same computation as {@see self::resolveForRangerRoute()}, for callers
+     * that already hold the concrete {@see IlluminateRoute} and have no need
+     * to round-trip it through a {@see RangerRoute} wrapper just to look it
+     * back up by name or URI.
+     */
+    public function resolveForRoute(IlluminateRoute $route): ?LocaleRouteMetadata
+    {
+        if (! $this->isEnabled()) {
+            return null;
+        }
+
         $action = $route->getAction();
         $raw = $action[$this->actionKey()] ?? null;
 
@@ -98,8 +113,14 @@ final class LocaleRouteResolver
         /** @var list<IlluminateRoute> $all */
         $all = $routes->getRoutes();
 
+        // `Laravel\Ranger\Components\Route::uri()` always carries a leading
+        // slash (and never a trailing one); the native `Illuminate\Routing\
+        // Route::uri()` never has either. Compare both trimmed, or this never
+        // matches anything.
+        $target = trim($rangerRoute->uri(), '/');
+
         foreach ($all as $route) {
-            if ($route->uri() !== $rangerRoute->uri()) {
+            if (trim($route->uri(), '/') !== $target) {
                 continue;
             }
 

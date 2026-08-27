@@ -105,6 +105,14 @@ With `hide_default_prefix => true` and `default_locale => 'en'`, `localized()` a
 unprefixed twin named `products.default` bound to `en`, so `/products` and `/en/products` both
 resolve.
 
+`localized()` also registers a concrete route per locale — `products.locale.de` at `/de/produkte`,
+alongside `products.locale.en` — so inbound requests match the translated URLs the generated
+client actually visits, without a routing middleware rewriting the request. If a route already
+has that exact name, the new one is silently shadowed (first registered wins) unless `strict` is
+on, in which case registration throws instead — the same exposure `products.default` already has.
+These per-locale routes exist purely for matching; they are excluded from Wayfinder's generated
+output, so they never produce a client-callable function of their own.
+
 Then run Wayfinder as usual:
 
 ```bash
