@@ -261,11 +261,25 @@ Drive it from the route table rather than a hand-written list of paths, so a fut
 Run: `vendor/bin/phpunit`
 Expected: green, comfortably above the 32-test baseline.
 
-- [ ] **Step 3: Update the README**
+- [ ] **Step 3: Extract the shared default-locale resolution**
+
+Task 4 left `GenerateLocalizedCommand` and `TypeScriptEmitterExtension` depending on `LocaleRouteResolver` purely for its `defaultLocale()` — a route-flavoured class injected into a TypeScript emitter to read a config value. It works, but it is the kind of dependency that becomes public API by habit once released.
+
+Extract that resolution into a small, neutrally-named collaborator both can depend on, leaving `LocaleRouteResolver` to resolve routes. The memoization Task 4 measured (one call for N routes) must survive — re-run its counter test and report the number.
+
+- [ ] **Step 4: Settle the claimed Laravel support**
+
+`require` claims `illuminate/*: ^12.0|^13.0`. The Pest plugins moved `require-dev` to Laravel 13.29 / testbench 11.2, and there is **no CI workflow in this repo**, so Laravel 12 has never been tested.
+
+Do not release an untested compatibility claim. Either run the suite against Laravel 12 (`composer update --with 'laravel/framework:^12.0' --with 'orchestra/testbench:^10.1' -W`, run, then restore) and report the result, or narrow `require` to what is actually tested. Say which you did and why.
+
+If the suite passes on both, a small CI matrix workflow is worth adding while the knowledge is fresh — but that is optional and secondary to knowing the answer.
+
+- [ ] **Step 5: Update the README**
 
 The README currently shows `products.url({ locale: 'de' })` returning `/de/produkte` without stating that anything serves it — which was true, and was the gap. Document that localized routes are matched inbound, that one route is registered per locale, and that `default_locale` accepts a callable. Correct the "How it works" section's claim that Laravel serves *a single* `{locale}`-parameterised URI.
 
-- [ ] **Step 4: Release**
+- [ ] **Step 6: Release**
 
 Tag a **minor** version — additive capability plus a bug fix, no breaking API change — and push the tag. Report the version chosen.
 
