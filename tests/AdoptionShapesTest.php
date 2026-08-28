@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Contracts\Routing\UrlRoutable;
 use Illuminate\Foundation\Application;
 use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Routing\Route as IlluminateRoute;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Collection;
 use Laravel\Wayfinder\Converters\Routes as WayfinderRoutes;
@@ -133,4 +134,34 @@ it('completes generation for a localized route once hide_default_prefix creates 
     $results = $this->app->make(WayfinderRoutes::class)->convert($routes);
 
     expect($results)->not->toBeEmpty();
+});
+
+it('does not duplicate a route group prefix when localized() is chained inside a still-open group', function (): void {
+    config()->set('wayfinder-locales.hide_default_prefix', true);
+
+    /** @var Router $router */
+    $router = $this->app['router'];
+
+    $router->name('shop.')->group(function (Router $router): void {
+        $router->prefix('cart')->group(function (Router $router): void {
+            $router->middleware('setlocale')
+                ->get('/{locale?}/items', fn () => 'cart:'.app()->getLocale())
+                ->name('items')
+                ->localized(['en' => 'items', 'de' => 'artikel']);
+        });
+    });
+
+    $router->getRoutes()->refreshNameLookups();
+
+    $default = collect($router->getRoutes()->getRoutes())
+        ->first(fn (IlluminateRoute $route): bool => str_contains((string) $route->getName(), '.default'));
+
+    $localeTwin = collect($router->getRoutes()->getRoutes())
+        ->first(fn (IlluminateRoute $route): bool => str_contains((string) $route->getName(), '.locale.de'));
+
+    expect($default)->not->toBeNull();
+    expect($default->uri())->toBe('cart/items');
+
+    expect($localeTwin)->not->toBeNull();
+    expect($localeTwin->uri())->toBe('cart/de/artikel');
 });
