@@ -98,6 +98,7 @@ final class LocalizedRouteMethod extends RouteMethod
             return $url;
         }
 
+        $url = $this->preserveSiblingArgsThroughModelBoundShorthand($url);
         $url = $this->fillOptionalLocale($url);
         $url = $this->stripUnusedParsedArgsForRouteWithNoRealParameters($url);
 
@@ -143,6 +144,30 @@ final class LocalizedRouteMethod extends RouteMethod
     private function fallbackLocaleForIndexNarrowing(): string
     {
         return $this->defaultLocale ?? $this->metadata->locales[0];
+    }
+
+    private function preserveSiblingArgsThroughModelBoundShorthand(string $url): string
+    {
+        if ($this->route->parameters()->count() !== 1) {
+            return $url;
+        }
+
+        $parameter = $this->route->parameters()->first();
+
+        if ($parameter->key === null) {
+            return $url;
+        }
+
+        $keyValue = "{$this->argsParam}.{$parameter->key}";
+
+        if (self::hasNullableKey($parameter)) {
+            $keyValue = sprintf('requireParameter(%s, "%s")', $keyValue, $parameter->name);
+        }
+
+        $rebuild = sprintf('%s = { %s: %s }', $this->argsParam, $parameter->name, $keyValue);
+        $spread = sprintf('%s = { ...%s, %s: %s }', $this->argsParam, $this->argsParam, $parameter->name, $keyValue);
+
+        return str_replace($rebuild, $spread, $url);
     }
 
     private function stripUnusedParsedArgsForRouteWithNoRealParameters(string $url): string
