@@ -3,10 +3,8 @@
 declare(strict_types=1);
 
 use Illuminate\Foundation\Application;
-use Illuminate\Routing\Route as IlluminateRoute;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Collection;
-use Laravel\Ranger\Components\Route as RangerRoute;
 use Laravel\Wayfinder\Converters\Routes as WayfinderRoutes;
 
 use function Orchestra\Testbench\Pest\defineEnvironment;
@@ -22,14 +20,6 @@ defineRoutes(function (Router $router): void {
         ->name('products')
         ->localized(['en' => 'products', 'de' => 'produkte']);
 });
-
-function rangerRouteNamed(string $name): RangerRoute
-{
-    /** @var IlluminateRoute $route */
-    $route = app('router')->getRoutes()->getByName($name);
-
-    return new RangerRoute($route, new Collection, null, null);
-}
 
 it('does not emit a separate export for each per locale route', function (): void {
     $routes = new Collection([
