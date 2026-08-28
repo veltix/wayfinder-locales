@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
+use Illuminate\Contracts\Routing\UrlRoutable;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Application;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Router;
 use Laravel\Ranger\RangerServiceProvider;
 use Laravel\Surveyor\SurveyorServiceProvider;
@@ -13,6 +15,34 @@ use Symfony\Component\Process\Process;
 
 use function Orchestra\Testbench\Pest\defineEnvironment;
 use function Orchestra\Testbench\Pest\defineRoutes;
+
+final class TypeScriptCompileTestPage implements UrlRoutable
+{
+    public function __construct(
+        public readonly string $id = '',
+        public readonly string $slug = '',
+    ) {}
+
+    public function getRouteKey(): string
+    {
+        return $this->id;
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'id';
+    }
+
+    public function resolveRouteBinding($value, $field = null): ?self
+    {
+        return null;
+    }
+
+    public function resolveChildRouteBinding($childType, $value, $field): ?self
+    {
+        return null;
+    }
+}
 
 beforeEach(function (): void {
     $this->app->register(SurveyorServiceProvider::class);
@@ -52,6 +82,15 @@ defineRoutes(function (Router $router): void {
     $router->get('/catalog', fn () => 'ok')
         ->name('catalog.listing')
         ->localized(['en' => 'catalog', 'de' => 'katalog']);
+
+    $router->get('/', fn () => 'ok')
+        ->name('home')
+        ->localized(['en' => '', 'de' => '']);
+
+    $router->middleware(SubstituteBindings::class)
+        ->get('/page/{page:slug}', fn (TypeScriptCompileTestPage $page) => 'ok')
+        ->name('page.show')
+        ->localized(['en' => 'page', 'de' => 'seite']);
 });
 
 function tscBinaryPath(): string
@@ -154,4 +193,80 @@ it('type-checks the real wayfinder:generate output for every localized route dec
     [$successful, $output] = compileGeneratedTypeScript($this->tscWorkspace);
 
     expect($successful)->toBeTrue($output);
+});
+
+/**
+ * @return array{0: bool, 1: string}
+ */
+function compileAndRunGeneratedEntrypoint(string $directory, string $entrypoint): array
+{
+    $files = new Filesystem;
+
+    $tsconfig = $directory.'/tsconfig.exec.json';
+
+    $files->put($tsconfig, json_encode([
+        'compilerOptions' => [
+            'target' => 'ES2020',
+            'module' => 'CommonJS',
+            'moduleResolution' => 'Node10',
+            'strict' => true,
+            'esModuleInterop' => true,
+            'skipLibCheck' => true,
+            'outDir' => $directory.'/dist',
+        ],
+        'include' => [$directory.'/**/*.ts'],
+    ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+
+    $compile = new Process([tscBinaryPath(), '-p', $tsconfig]);
+    $compile->setTimeout(60);
+    $compile->run();
+
+    if (! $compile->isSuccessful()) {
+        return [false, $compile->getOutput().$compile->getErrorOutput()];
+    }
+
+    $run = new Process(['node', $directory.'/dist/'.$entrypoint]);
+    $run->setTimeout(30);
+    $run->run();
+
+    if (! $run->isSuccessful()) {
+        return [false, $run->getOutput().$run->getErrorOutput()];
+    }
+
+    return [true, $run->getOutput()];
+}
+
+it('executes the generated output for a plain localized route, a model-bound route, and a root route, in both locales', function (): void {
+    $this->artisan('wayfinder:generate', ['--path' => $this->tscWorkspace, '--fresh' => true])
+        ->assertSuccessful();
+
+    $files = new Filesystem;
+
+    $files->put($this->tscWorkspace.'/run.ts', <<<'TS'
+        import { home } from "./routes";
+        import product from "./routes/product";
+        import page from "./routes/page";
+
+        console.log(product.show.url({ product: 7, locale: "en" }));
+        console.log(product.show.url({ product: 7, locale: "de" }));
+        console.log(page.show.url({ slug: "widget", locale: "en" }));
+        console.log(page.show.url({ slug: "widget", locale: "de" }));
+        console.log(home.url({ locale: "en" }));
+        console.log(home.url({ locale: "de" }));
+        TS);
+
+    [$successful, $output] = compileAndRunGeneratedEntrypoint($this->tscWorkspace, 'run.js');
+
+    expect($successful)->toBeTrue($output);
+
+    $lines = explode(PHP_EOL, trim($output));
+
+    expect($lines)->toBe([
+        '/product/7',
+        '/de/produkt/7',
+        '/page/widget',
+        '/de/seite/widget',
+        '/',
+        '/de',
+    ]);
 });
