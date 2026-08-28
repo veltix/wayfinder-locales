@@ -14,6 +14,7 @@ use Laravel\Wayfinder\Converters\JsonData;
 use Laravel\Wayfinder\Converters\ResourceData;
 use Laravel\Wayfinder\Converters\Routes as BaseRoutes;
 use Laravel\Wayfinder\Langs\TypeScript\Converters\RouteMethod;
+use Laravel\Wayfinder\Langs\TypeScript\Import;
 use Veltix\WayfinderLocales\Route\LocaleRouteResolver;
 
 final class LocaleAwareRouteTransformer extends BaseRoutes
@@ -59,6 +60,30 @@ final class LocaleAwareRouteTransformer extends BaseRoutes
     private function isLocaleTwin(Route $route): bool
     {
         return $route->name() !== null && str_contains($route->name(), '.locale.');
+    }
+
+    protected function appendCommonImports(Collection $routes, string $path): void
+    {
+        parent::appendCommonImports($routes, $path);
+
+        $needsSyntheticUrlDefaults = $routes->first(fn (Route $route): bool => $this->routeNeedsSyntheticUrlDefaults($route));
+
+        if ($needsSyntheticUrlDefaults !== null) {
+            $this->imports[$path]->add(Import::relativePathFromFile($path, 'index'), 'applyUrlDefaults');
+        }
+    }
+
+    private function routeNeedsSyntheticUrlDefaults(Route $route): bool
+    {
+        $metadata = $this->emitterExtension->metadataFor($route);
+
+        if ($metadata === null) {
+            return false;
+        }
+
+        return ! $route->parameters()->contains(
+            fn ($parameter) => $parameter->name === $metadata->localeParameter,
+        );
     }
 
     protected function writeControllerMethodExport(Route $route, string $path): RouteMethod
