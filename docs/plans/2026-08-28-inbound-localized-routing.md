@@ -197,7 +197,51 @@ git commit -m "feat: allow default_locale to be resolved at runtime"
 
 ---
 
-### Task 5: Round-trip symmetry across the matrix, then release
+### Task 5: Migrate the suite to Pest 5
+
+**Files:**
+- Modify: `composer.json` (require-dev), `phpunit.xml.dist`
+- Create: `tests/Pest.php`
+- Modify: every file under `tests/`
+
+**Interfaces:**
+- Produces: a Pest suite the next task writes its matrix test into directly.
+
+This lands **before** the matrix test so that test is authored in Pest natively rather than written in PHPUnit and migrated an hour later.
+
+The suite is 46 tests across 10 files, all PHPUnit classes extending `Tests\TestCase` (a bare `Orchestra\Testbench\TestCase` registering `WayfinderLocalesServiceProvider`). `pestphp/pest` also ships `Pint/phpdoc_type_annotations_only`, so the ruleset adopted in the previous commit already matches where this is going.
+
+- [ ] **Step 1: Install Pest and bind the base test case**
+
+Add `pestphp/pest` (^5) and its Laravel plugin to `require-dev`. Create `tests/Pest.php` binding `Tests\TestCase` across the suite — that is what lets the migrated files drop their `extends` and their `getPackageProviders()` boilerplate.
+
+Point `phpunit.xml.dist` at Pest, or replace it per Pest 5's convention. Check what `pestphp/pest`'s own repo does and follow it.
+
+- [ ] **Step 2: Migrate file by file, running the suite after each**
+
+Convert each `public function it_x(): void` into `it('x', function () { ... })`. Migrate one file, run the suite, commit; then the next. A single sweeping commit makes a bisect useless if one conversion changes a test's meaning.
+
+**The count is the invariant: 46 tests before, 46 after.** Any file that comes out with fewer is a test silently dropped — Pest's `it()` at file scope will not error if a conversion loses a block. Report the per-file counts.
+
+- [ ] **Step 3: Preserve what the classes carried**
+
+Some files set config in `setUp()` or use helper traits (`tests/Concerns/WritesLangFiles.php`). Those become `beforeEach()` and plain function imports or `uses()`. Config set per test must stay per test — Pest's `beforeEach` runs before each test, but a `setUp()` that mutated shared state and relied on ordering will not survive unchanged, and this suite has tests that change `default_locale` mid-file.
+
+- [ ] **Step 4: Verify equivalence, not just green**
+
+Run the full suite. Then pick the two tests that pin the load-bearing properties — one from `InboundRoutingTest`, one from `DefaultLocaleTest` — break the source they cover, and confirm the migrated tests still fail. A migration that turns a discriminating test into a passing no-op is the failure mode here, and only that check finds it.
+
+- [ ] **Step 5: Commit**
+
+```bash
+vendor/bin/pint
+git add composer.json phpunit.xml.dist tests
+git commit -m "test: migrate the suite to Pest 5"
+```
+
+---
+
+### Task 6: Round-trip symmetry across the matrix, then release
 
 **Files:**
 - Create: `tests/RoundTripSymmetryTest.php`
@@ -235,7 +279,7 @@ git commit -m "test: pin round-trip symmetry across locales and route shapes"
 
 ## Self-Review
 
-**Spec coverage.** Gap 1 (no inbound matching) → Tasks 1, 2, 5. Gap 2 (twin uses the declared literal) → Task 3. Gap 3 (`lroute()` untranslated), found while writing Task 1's characterisation test → Task 2, and pinned against the other generator in Task 5. `default_locale` as a resolver, which the consuming app needs for its shop setting → Task 4. The spec's acceptance property — round-trip symmetry — is Task 1's second test and Task 5's whole subject.
+**Spec coverage.** Gap 1 (no inbound matching) → Tasks 1, 2, 5. Gap 2 (twin uses the declared literal) → Task 3. Gap 3 (`lroute()` untranslated), found while writing Task 1's characterisation test → Task 2, and pinned against the other generator in Task 6. `default_locale` as a resolver, which the consuming app needs for its shop setting → Task 4. The spec's acceptance property — round-trip symmetry — is Task 1's second test and Task 5's whole subject.
 
 **Task 1 ships no implementation on purpose.** The defect has existed since the package's first release precisely because nothing compared what it generates against what it matches. Committing that comparison as a failing test first means the property is pinned by something that has been *observed* to fail, not merely asserted to pass.
 
