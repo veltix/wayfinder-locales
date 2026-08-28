@@ -10,12 +10,14 @@ use Illuminate\Routing\Router;
 use InvalidArgumentException;
 use Laravel\Ranger\Components\Route as RangerRoute;
 use RuntimeException;
+use Veltix\WayfinderLocales\Locale\DefaultLocaleResolver;
 
 final class LocaleRouteResolver
 {
     public function __construct(
         private readonly Router $router,
         private readonly Repository $config,
+        private readonly DefaultLocaleResolver $defaultLocaleResolver,
     ) {}
 
     public function resolveForRangerRoute(RangerRoute $rangerRoute): ?LocaleRouteMetadata
@@ -27,6 +29,20 @@ final class LocaleRouteResolver
         $route = $this->findIlluminateRoute($rangerRoute);
 
         if (! $route instanceof IlluminateRoute) {
+            return null;
+        }
+
+        return $this->resolveForRoute($route);
+    }
+
+    /**
+     * Same computation as {@see self::resolveForRangerRoute()}, for callers
+     * that already hold the concrete {@see IlluminateRoute} and have no need
+     * to round-trip it through a {@see RangerRoute} wrapper just to look it
+     */
+    public function resolveForRoute(IlluminateRoute $route): ?LocaleRouteMetadata
+    {
+        if (! $this->isEnabled()) {
             return null;
         }
 
@@ -98,8 +114,10 @@ final class LocaleRouteResolver
         /** @var list<IlluminateRoute> $all */
         $all = $routes->getRoutes();
 
+        $target = trim($rangerRoute->uri(), '/');
+
         foreach ($all as $route) {
-            if ($route->uri() !== $rangerRoute->uri()) {
+            if (trim($route->uri(), '/') !== $target) {
                 continue;
             }
 
@@ -321,15 +339,9 @@ final class LocaleRouteResolver
             && $this->defaultLocale() !== null;
     }
 
-    private function defaultLocale(): ?string
+    public function defaultLocale(): ?string
     {
-        $value = $this->config->get('wayfinder-locales.default_locale');
-
-        if (is_string($value) && $value !== '') {
-            return $value;
-        }
-
-        return null;
+        return $this->defaultLocaleResolver->resolve();
     }
 
     /**

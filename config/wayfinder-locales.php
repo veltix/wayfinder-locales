@@ -27,9 +27,19 @@ return [
     | from the active locale. It is also the locale whose prefix is dropped when
     | `hide_default_prefix` is enabled. It should appear in `locales`.
     |
+    | Accepts either a plain string, or a `callable(): string` — for an app
+    | whose default locale comes from its own storage (a shop setting, say)
+    | rather than a static config value. The callable is resolved once per
+    | route-registration pass, not once per route, so it's safe to back with
+    | a database lookup or a settings cache. If it throws, or returns
+    | something other than a non-empty string, resolution falls back to the
+    | first entry in `locales` — a storage blip at boot must not take
+    | routing down with it.
+    |
     */
 
     'default_locale' => env('WAYFINDER_DEFAULT_LOCALE', 'en'),
+    // 'default_locale' => fn () => Setting::get('locale', 'en'),
 
     /*
     |--------------------------------------------------------------------------

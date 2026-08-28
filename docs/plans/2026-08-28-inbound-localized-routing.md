@@ -18,6 +18,8 @@ Both confirmed by running the code, not by reading the README.
 
 **The existing suite cannot see this.** `tests/SetLocaleMiddlewareTest.php:38` asserts `$this->get('/de/products')` — the *untranslated* path — is OK. It never requests `/de/produkte`. The suite tests the URI Laravel matches rather than the URI the package emits, so the two have never been compared.
 
+**Gap 3 — `lroute()` emits untranslated URLs.** Found during Task 1. `src/helpers.php:17-30` fills the locale *parameter* and delegates to `app('url')->route()`; it never consults `LocaleRouteResolver`. So `lroute('products', [], 'de')` returns `/de/products`, not `/de/produkte` — the server-side helper has the same blind spot as the router. Only the TypeScript generation path is locale-aware. This matters beyond tidiness: the consuming app's plan is to make its `LocalizedUrl` a façade over `lroute()`, which would have reproduced the very bug this work removes.
+
 **Gap 2 — the unprefixed twin uses the declared URI literal.** Probe with `default_locale = 'et'`:
 
 ```
@@ -107,16 +109,24 @@ If committing a red test conflicts with repo convention, mark them skipped with 
 Run: `vendor/bin/phpunit --filter InboundRoutingTest`
 Expected: PASS.
 
-- [ ] **Step 2: Keep the whole suite green**
+- [ ] **Step 2: Make `lroute()` locale-aware**
+
+`src/helpers.php`'s `lroute()` fills the locale parameter and calls `app('url')->route()`, so it emits `/de/products`. Once a route exists per locale, `lroute()` should resolve to **that locale's** route and return its translated URL.
+
+Add a test asserting `lroute('products', [], 'de')` returns the same string as the resolver's `uriForLocale('de')` — comparing the two generators against each other rather than against a hand-written path, so they cannot drift apart later.
+
+Keep its documented fallback intact: a route with **no** locale parameter (Fortify's `login`, say) must still generate unchanged. That behaviour is in the function's docblock and consumers rely on it.
+
+- [ ] **Step 3: Keep the whole suite green**
 
 Run: `vendor/bin/phpunit`
 Expected: at least 32 tests, 0 failures. `LocalizedRouteEmitTest` and `RegistrationTest` both inspect registered routes and are the most likely to notice a changed route table — if either needs updating, that is a signal about the public contract, so explain the change rather than just making it pass.
 
-- [ ] **Step 3: Prove it discriminates**
+- [ ] **Step 4: Prove it discriminates**
 
 Revert the per-locale registration, confirm `InboundRoutingTest` fails again, restore. Report the observed output.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 vendor/bin/pint
@@ -187,7 +197,51 @@ git commit -m "feat: allow default_locale to be resolved at runtime"
 
 ---
 
-### Task 5: Round-trip symmetry across the matrix, then release
+### Task 5: Migrate the suite to Pest 5
+
+**Files:**
+- Modify: `composer.json` (require-dev), `phpunit.xml.dist`
+- Create: `tests/Pest.php`
+- Modify: every file under `tests/`
+
+**Interfaces:**
+- Produces: a Pest suite the next task writes its matrix test into directly.
+
+This lands **before** the matrix test so that test is authored in Pest natively rather than written in PHPUnit and migrated an hour later.
+
+The suite is 46 tests across 10 files, all PHPUnit classes extending `Tests\TestCase` (a bare `Orchestra\Testbench\TestCase` registering `WayfinderLocalesServiceProvider`). `pestphp/pest` also ships `Pint/phpdoc_type_annotations_only`, so the ruleset adopted in the previous commit already matches where this is going.
+
+- [ ] **Step 1: Install Pest and bind the base test case**
+
+Add `pestphp/pest` (^5) and its Laravel plugin to `require-dev`. Create `tests/Pest.php` binding `Tests\TestCase` across the suite — that is what lets the migrated files drop their `extends` and their `getPackageProviders()` boilerplate.
+
+Point `phpunit.xml.dist` at Pest, or replace it per Pest 5's convention. Check what `pestphp/pest`'s own repo does and follow it.
+
+- [ ] **Step 2: Migrate file by file, running the suite after each**
+
+Convert each `public function it_x(): void` into `it('x', function () { ... })`. Migrate one file, run the suite, commit; then the next. A single sweeping commit makes a bisect useless if one conversion changes a test's meaning.
+
+**The count is the invariant: 46 tests before, 46 after.** Any file that comes out with fewer is a test silently dropped — Pest's `it()` at file scope will not error if a conversion loses a block. Report the per-file counts.
+
+- [ ] **Step 3: Preserve what the classes carried**
+
+Some files set config in `setUp()` or use helper traits (`tests/Concerns/WritesLangFiles.php`). Those become `beforeEach()` and plain function imports or `uses()`. Config set per test must stay per test — Pest's `beforeEach` runs before each test, but a `setUp()` that mutated shared state and relied on ordering will not survive unchanged, and this suite has tests that change `default_locale` mid-file.
+
+- [ ] **Step 4: Verify equivalence, not just green**
+
+Run the full suite. Then pick the two tests that pin the load-bearing properties — one from `InboundRoutingTest`, one from `DefaultLocaleTest` — break the source they cover, and confirm the migrated tests still fail. A migration that turns a discriminating test into a passing no-op is the failure mode here, and only that check finds it.
+
+- [ ] **Step 5: Commit**
+
+```bash
+vendor/bin/pint
+git add composer.json phpunit.xml.dist tests
+git commit -m "test: migrate the suite to Pest 5"
+```
+
+---
+
+### Task 6: Round-trip symmetry across the matrix, then release
 
 **Files:**
 - Create: `tests/RoundTripSymmetryTest.php`
@@ -198,7 +252,7 @@ git commit -m "feat: allow default_locale to be resolved at runtime"
 
 - [ ] **Step 1: Write the matrix test**
 
-For a set of routes covering the shapes this package supports — required `{locale}`, optional `{locale?}`, a route with extra path segments after the localized one, a route with model-bound parameters, and `mode => 'tail'` as well as `'segment'` — assert for **every configured locale**: the generated URL is matched by the router, lands on the expected action, and sets `app()->getLocale()` to that locale.
+For a set of routes covering the shapes this package supports — required `{locale}`, optional `{locale?}`, a route with extra path segments after the localized one, a route with model-bound parameters, and `mode => 'tail'` as well as `'segment'` — assert for **every configured locale**: the generated URL is matched by the router, lands on the expected action, and sets `app()->getLocale()` to that locale. Assert it for **both** generators — the resolver's `uriForLocale()` (which the TypeScript output is built from) and `lroute()` (the server-side helper) — since Task 1 found they disagreed.
 
 Drive it from the route table rather than a hand-written list of paths, so a future route shape is covered without anyone remembering to add it.
 
@@ -207,11 +261,25 @@ Drive it from the route table rather than a hand-written list of paths, so a fut
 Run: `vendor/bin/phpunit`
 Expected: green, comfortably above the 32-test baseline.
 
-- [ ] **Step 3: Update the README**
+- [ ] **Step 3: Extract the shared default-locale resolution**
+
+Task 4 left `GenerateLocalizedCommand` and `TypeScriptEmitterExtension` depending on `LocaleRouteResolver` purely for its `defaultLocale()` — a route-flavoured class injected into a TypeScript emitter to read a config value. It works, but it is the kind of dependency that becomes public API by habit once released.
+
+Extract that resolution into a small, neutrally-named collaborator both can depend on, leaving `LocaleRouteResolver` to resolve routes. The memoization Task 4 measured (one call for N routes) must survive — re-run its counter test and report the number.
+
+- [ ] **Step 4: Settle the claimed Laravel support**
+
+`require` claims `illuminate/*: ^12.0|^13.0`. The Pest plugins moved `require-dev` to Laravel 13.29 / testbench 11.2, and there is **no CI workflow in this repo**, so Laravel 12 has never been tested.
+
+Do not release an untested compatibility claim. Either run the suite against Laravel 12 (`composer update --with 'laravel/framework:^12.0' --with 'orchestra/testbench:^10.1' -W`, run, then restore) and report the result, or narrow `require` to what is actually tested. Say which you did and why.
+
+If the suite passes on both, a small CI matrix workflow is worth adding while the knowledge is fresh — but that is optional and secondary to knowing the answer.
+
+- [ ] **Step 5: Update the README**
 
 The README currently shows `products.url({ locale: 'de' })` returning `/de/produkte` without stating that anything serves it — which was true, and was the gap. Document that localized routes are matched inbound, that one route is registered per locale, and that `default_locale` accepts a callable. Correct the "How it works" section's claim that Laravel serves *a single* `{locale}`-parameterised URI.
 
-- [ ] **Step 4: Release**
+- [ ] **Step 6: Release**
 
 Tag a **minor** version — additive capability plus a bug fix, no breaking API change — and push the tag. Report the version chosen.
 
@@ -225,7 +293,7 @@ git commit -m "test: pin round-trip symmetry across locales and route shapes"
 
 ## Self-Review
 
-**Spec coverage.** Gap 1 (no inbound matching) → Tasks 1, 2, 5. Gap 2 (twin uses the declared literal) → Task 3. `default_locale` as a resolver, which the consuming app needs for its shop setting → Task 4. The spec's acceptance property — round-trip symmetry — is Task 1's second test and Task 5's whole subject.
+**Spec coverage.** Gap 1 (no inbound matching) → Tasks 1, 2, 5. Gap 2 (twin uses the declared literal) → Task 3. Gap 3 (`lroute()` untranslated), found while writing Task 1's characterisation test → Task 2, and pinned against the other generator in Task 6. `default_locale` as a resolver, which the consuming app needs for its shop setting → Task 4. The spec's acceptance property — round-trip symmetry — is Task 1's second test and Task 5's whole subject.
 
 **Task 1 ships no implementation on purpose.** The defect has existed since the package's first release precisely because nothing compared what it generates against what it matches. Committing that comparison as a failing test first means the property is pinned by something that has been *observed* to fail, not merely asserted to pass.
 

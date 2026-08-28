@@ -43,6 +43,8 @@ final class LocaleAwareRouteTransformer extends BaseRoutes
      */
     public function convert(Collection $routes): array
     {
+        $routes = $routes->reject($this->isLocaleTwin(...));
+
         foreach ($routes as $route) {
             $metadata = $this->localeRouteResolver->resolveForRangerRoute($route);
 
@@ -52,6 +54,11 @@ final class LocaleAwareRouteTransformer extends BaseRoutes
         }
 
         return parent::convert($routes);
+    }
+
+    private function isLocaleTwin(Route $route): bool
+    {
+        return $route->name() !== null && str_contains($route->name(), '.locale.');
     }
 
     protected function writeControllerMethodExport(Route $route, string $path): RouteMethod

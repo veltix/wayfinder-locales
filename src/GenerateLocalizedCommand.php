@@ -6,6 +6,7 @@ namespace Veltix\WayfinderLocales;
 
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
+use Veltix\WayfinderLocales\Locale\DefaultLocaleResolver;
 use Veltix\WayfinderLocales\Translations\TranslationCollector;
 use Veltix\WayfinderLocales\Translations\TranslationWriter;
 use Veltix\WayfinderLocales\Wayfinder\LocaleAwareRouteTransformer;
@@ -13,12 +14,6 @@ use Veltix\WayfinderLocales\Wayfinder\LocaleAwareRouteTransformer;
 use function Illuminate\Filesystem\join_paths;
 
 /**
- * Generates the frontend translation output: one lazily-loaded catalog module
- * per locale, the `TranslationKey` union, the `Locale` union plus active-locale
- * accessors, and the `t()` / `tChoice()` runtime.
- *
- * Routes and actions are NOT generated here — `wayfinder:generate` emits those,
- * with localized URL templates supplied by this package's
  * {@see LocaleAwareRouteTransformer}.
  */
 class GenerateLocalizedCommand extends Command
@@ -27,8 +22,10 @@ class GenerateLocalizedCommand extends Command
 
     protected $description = 'Generate TypeScript translation catalogs for your configured locales.';
 
-    public function __construct(private Filesystem $files)
-    {
+    public function __construct(
+        private Filesystem $files,
+        private readonly DefaultLocaleResolver $defaultLocaleResolver,
+    ) {
         parent::__construct();
     }
 
@@ -74,18 +71,12 @@ class GenerateLocalizedCommand extends Command
         ));
     }
 
-    /**
-     * The locale whose catalog is the source of truth for the generated key
-     * union, and the runtime's fallback when a key is missing.
-     */
     private function defaultLocale(): string
     {
-        return (string) config('wayfinder-locales.default_locale', 'en');
+        return $this->defaultLocaleResolver->resolve() ?? 'en';
     }
 
     /**
-     * Lang groups (file basenames) kept out of the frontend catalogs.
-     *
      * @return list<string>
      */
     private function excludedGroups(): array

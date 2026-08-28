@@ -9,17 +9,6 @@ use Laravel\Wayfinder\Langs\TypeScript;
 use Laravel\Wayfinder\Langs\TypeScript\Converters\RouteMethod;
 use Veltix\WayfinderLocales\Route\LocaleRouteMetadata;
 
-/**
- * Wayfinder's route method, plus a per-locale URL template table.
- *
- * Laravel serves one `{locale}`-parameterised URI, so Wayfinder would emit one
- * `definition.url`. This picks the template matching the locale argument at
- * call time, which is what makes `/de/produkte` come out of `products('de')`.
- *
- * Everything else is inherited and post-processed rather than copied: the base
- * URL builder is ~140 lines of Wayfinder internals that move between releases,
- * and a stale copy of them fails silently.
- */
 final class LocalizedRouteMethod extends RouteMethod
 {
     public function __construct(
@@ -44,15 +33,6 @@ final class LocalizedRouteMethod extends RouteMethod
         return $this->localizedTemplateConstant().PHP_EOL.PHP_EOL.parent::controllerMethod();
     }
 
-    /**
-     * Narrow the locale argument from whatever was inferred for the route
-     * parameter to the locales the route actually declares.
-     *
-     * This one is a copy of the parent rather than a post-process: the argument
-     * types are builder objects, and there is no way to re-open one after the
-     * fact. LocalizedRouteEmitTest fails loudly if the parent's version moves
-     * out from under it.
-     */
     protected function collectArgTypes(): array
     {
         if ($this->metadata === null) {
@@ -109,8 +89,6 @@ final class LocalizedRouteMethod extends RouteMethod
 
         $url = $this->fillOptionalLocale($url);
 
-        // The parent's `.replace()` chain and `queryParams()` suffix hang off
-        // this expression, so substituting it in place keeps all of them.
         return str_replace(
             "return {$this->name}.definition.url",
             sprintf(
@@ -124,10 +102,6 @@ final class LocalizedRouteMethod extends RouteMethod
         );
     }
 
-    /**
-     * An optional `{locale?}` may be omitted at the call site, which would
-     * index the template table with `undefined`. Default it first.
-     */
     private function fillOptionalLocale(string $url): string
     {
         if (! $this->metadata->localeOptional || $this->defaultLocale === null) {

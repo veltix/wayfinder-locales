@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Veltix\WayfinderLocales\Wayfinder;
 
-use Illuminate\Config\Repository;
 use Laravel\Ranger\Components\Route as RangerRoute;
 use Laravel\Wayfinder\Langs\TypeScript\Converters\RouteMethod;
+use Veltix\WayfinderLocales\Locale\DefaultLocaleResolver;
 use Veltix\WayfinderLocales\Route\LocaleRouteMetadata;
 
 final class TypeScriptEmitterExtension
@@ -16,7 +16,7 @@ final class TypeScriptEmitterExtension
      */
     private array $metadataByRouteKey = [];
 
-    public function __construct(private readonly Repository $config) {}
+    public function __construct(private readonly DefaultLocaleResolver $defaultLocaleResolver) {}
 
     public function register(RangerRoute $route, LocaleRouteMetadata $metadata): void
     {
@@ -60,12 +60,6 @@ final class TypeScriptEmitterExtension
 
     private function defaultLocale(): ?string
     {
-        $value = $this->config->get('wayfinder-locales.default_locale');
-
-        if (is_string($value) && $value !== '') {
-            return $value;
-        }
-
-        return null;
+        return $this->defaultLocaleResolver->resolve();
     }
 }

@@ -8,14 +8,6 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-/**
- * Applies the matched route's locale to the application, so translations and
- * `app()->getLocale()` reflect the URL the user is on.
- *
- * Localized routes carry the locale as a URI parameter (`/{locale}/products`).
- * When `hide_default_prefix` is on, the generated unprefixed twin carries it as
- * a route default instead, so both are consulted.
- */
 class SetLocale
 {
     public function handle(Request $request, Closure $next): Response
