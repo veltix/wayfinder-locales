@@ -2,51 +2,39 @@
 
 declare(strict_types=1);
 
-namespace Veltix\WayfinderLocales\Tests;
-
+use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
-use PHPUnit\Framework\Attributes\Test;
-use RuntimeException;
 
-class LocalizedRouteNameCollisionTest extends TestCase
-{
-    protected function defineEnvironment($app): void
-    {
-        $app['config']->set('wayfinder-locales.locales', ['en', 'de']);
-        $app['config']->set('wayfinder-locales.default_locale', 'en');
-    }
+use function Orchestra\Testbench\Pest\defineEnvironment;
 
-    #[Test]
-    public function it_throws_under_strict_mode_when_a_locale_route_name_collides(): void
-    {
-        config()->set('wayfinder-locales.strict', true);
+defineEnvironment(function (Application $app): void {
+    $app['config']->set('wayfinder-locales.locales', ['en', 'de']);
+    $app['config']->set('wayfinder-locales.default_locale', 'en');
+});
 
-        Route::get('/manual', fn () => 'manual')->name('products.locale.de');
+it('throws under strict mode when a locale route name collides', function (): void {
+    config()->set('wayfinder-locales.strict', true);
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessageMatches('/products\.locale\.de/');
+    Route::get('/manual', fn () => 'manual')->name('products.locale.de');
 
-        Route::get('/{locale?}/products', fn () => 'ok')
-            ->name('products')
-            ->localized(['en' => 'products', 'de' => 'produkte']);
-    }
+    $this->expectException(RuntimeException::class);
+    $this->expectExceptionMessageMatches('/products\.locale\.de/');
 
-    #[Test]
-    public function it_silently_shadows_the_collision_under_non_strict_mode(): void
-    {
-        config()->set('wayfinder-locales.strict', false);
+    Route::get('/{locale?}/products', fn () => 'ok')
+        ->name('products')
+        ->localized(['en' => 'products', 'de' => 'produkte']);
+});
 
-        Route::get('/manual', fn () => 'manual')->name('products.locale.de');
+it('silently shadows the collision under non strict mode', function (): void {
+    config()->set('wayfinder-locales.strict', false);
 
-        Route::get('/{locale?}/products', fn () => 'ok')
-            ->name('products')
-            ->localized(['en' => 'products', 'de' => 'produkte']);
+    Route::get('/manual', fn () => 'manual')->name('products.locale.de');
 
-        $this->app['router']->getRoutes()->refreshNameLookups();
+    Route::get('/{locale?}/products', fn () => 'ok')
+        ->name('products')
+        ->localized(['en' => 'products', 'de' => 'produkte']);
 
-        $this->assertSame(
-            'manual',
-            $this->app['router']->getRoutes()->getByName('products.locale.de')->uri(),
-        );
-    }
-}
+    $this->app['router']->getRoutes()->refreshNameLookups();
+
+    expect($this->app['router']->getRoutes()->getByName('products.locale.de')->uri())->toBe('manual');
+});
