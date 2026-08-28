@@ -40,7 +40,7 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
         ));
 
         $this->app->singleton(TypeScriptEmitterExtension::class, fn ($app): TypeScriptEmitterExtension => new TypeScriptEmitterExtension(
-            config: $app->make(Repository::class),
+            localeRouteResolver: $app->make(LocaleRouteResolver::class),
         ));
 
         $this->app->bind(WayfinderRoutes::class, fn ($app): WayfinderRoutes => new LocaleAwareRouteTransformer(
@@ -111,10 +111,14 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
             // Resolved once, up front, so both the unprefixed twin below and
             // the per-locale loop further down read the same metadata instead
             // of computing it twice (or drifting between two computations).
-            $metadata = app(LocaleRouteResolver::class)->resolveForRoute($this);
+            $localeRouteResolver = app(LocaleRouteResolver::class);
+            $metadata = $localeRouteResolver->resolveForRoute($this);
 
             $hideDefault = (bool) config('wayfinder-locales.hide_default_prefix', false);
-            $defaultLocale = config('wayfinder-locales.default_locale');
+            // Same resolver instance the metadata above just went through, so
+            // this reads the identical (cached) default locale rather than a
+            // second, potentially different, resolution of the config value.
+            $defaultLocale = $localeRouteResolver->defaultLocale();
             $localeParameter = (string) config('wayfinder-locales.locale_parameter', 'locale');
 
             if ($hideDefault && is_string($defaultLocale) && $defaultLocale !== '') {

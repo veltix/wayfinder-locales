@@ -6,6 +6,7 @@ namespace Veltix\WayfinderLocales;
 
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
+use Veltix\WayfinderLocales\Route\LocaleRouteResolver;
 use Veltix\WayfinderLocales\Translations\TranslationCollector;
 use Veltix\WayfinderLocales\Translations\TranslationWriter;
 use Veltix\WayfinderLocales\Wayfinder\LocaleAwareRouteTransformer;
@@ -27,8 +28,10 @@ class GenerateLocalizedCommand extends Command
 
     protected $description = 'Generate TypeScript translation catalogs for your configured locales.';
 
-    public function __construct(private Filesystem $files)
-    {
+    public function __construct(
+        private Filesystem $files,
+        private readonly LocaleRouteResolver $localeRouteResolver,
+    ) {
         parent::__construct();
     }
 
@@ -80,7 +83,7 @@ class GenerateLocalizedCommand extends Command
      */
     private function defaultLocale(): string
     {
-        return (string) config('wayfinder-locales.default_locale', 'en');
+        return $this->localeRouteResolver->defaultLocale() ?? 'en';
     }
 
     /**

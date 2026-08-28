@@ -8,6 +8,7 @@ use Illuminate\Routing\Route as IlluminateRoute;
 use Illuminate\Support\Collection;
 use Laravel\Ranger\Components\Route as RangerRoute;
 use PHPUnit\Framework\Attributes\Test;
+use RuntimeException;
 use Veltix\WayfinderLocales\Route\LocaleRouteResolver;
 use Veltix\WayfinderLocales\Tests\Concerns\WritesLangFiles;
 
@@ -177,6 +178,92 @@ class DefaultLocaleTest extends TestCase
         $this->artisan('wayfinder-locales:generate', ['--path' => $this->output])
             ->expectsOutputToContain('is not listed in wayfinder-locales.locales')
             ->assertSuccessful();
+    }
+
+    /**
+     * The callable form: `default_locale` may be a closure instead of a
+     * plain string, so a consuming app can source it from its own storage (a
+     * shop setting) rather than a static config value. The unprefixed twin
+     * must be built from whatever locale the closure resolves to, exactly as
+     * it would from a string.
+     */
+    #[Test]
+    public function a_closure_default_locale_drives_the_unprefixed_route_registration(): void
+    {
+        config()->set('wayfinder-locales.default_locale', fn (): string => 'de');
+
+        $this->app['router']->get('/{locale}/gadgets', fn () => 'ok')
+            ->name('gadgets')
+            ->localized(['en' => 'gadgets', 'de' => 'apparate']);
+
+        $this->app['router']->getRoutes()->refreshNameLookups();
+
+        $default = $this->app['router']->getRoutes()->getByName('gadgets.default');
+
+        $this->assertNotNull($default);
+        $this->assertSame('apparate', $default->uri());
+        $this->assertSame('de', $default->defaults['locale']);
+    }
+
+    /**
+     * Route registration happens once per app boot, but `Route::localized()`
+     * runs once per declared route — a real routes file might call it dozens
+     * of times. A closure backed by a database or a settings cache must not
+     * be invoked once per route: it's resolved once per registration pass
+     * and the result reused for the rest.
+     */
+    #[Test]
+    public function the_resolver_closure_is_invoked_once_per_registration_pass_not_once_per_route(): void
+    {
+        $calls = 0;
+
+        config()->set('wayfinder-locales.default_locale', function () use (&$calls): string {
+            $calls++;
+
+            return 'de';
+        });
+
+        foreach (['widgets', 'sprockets', 'gizmos'] as $name) {
+            $this->app['router']->get("/{locale}/{$name}", fn () => 'ok')
+                ->name($name)
+                ->localized(['en' => $name, 'de' => $name.'-de']);
+        }
+
+        $this->assertSame(
+            1,
+            $calls,
+            'Expected the default_locale closure to be invoked once for 3 routes, not once per route.',
+        );
+    }
+
+    /**
+     * The important case: route registration happens at boot, so if a
+     * consuming app's resolver hits a database that's briefly unavailable
+     * and throws, that must not take routing down with it. Resolution falls
+     * back to the first configured locale (`en`, from `['en', 'de']`) and
+     * registration completes.
+     */
+    #[Test]
+    public function a_throwing_resolver_falls_back_and_registration_still_completes(): void
+    {
+        config()->set('wayfinder-locales.default_locale', function (): string {
+            throw new RuntimeException('settings store unavailable');
+        });
+
+        $this->app['router']->get('/{locale}/thingamajigs', fn () => 'ok')
+            ->name('thingamajigs')
+            ->localized(['en' => 'thingamajigs', 'de' => 'dinger']);
+
+        $this->app['router']->getRoutes()->refreshNameLookups();
+
+        $localized = $this->app['router']->getRoutes()->getByName('thingamajigs');
+        $this->assertNotNull($localized, 'Route registration must complete even when the resolver throws.');
+
+        $default = $this->app['router']->getRoutes()->getByName('thingamajigs.default');
+
+        $this->assertNotNull($default, 'Expected the unprefixed twin to still be registered off the fallback locale.');
+        $this->assertSame('thingamajigs', $default->uri());
+        $this->assertSame('en', $default->defaults['locale'], 'Expected the fallback to be the first configured locale.');
     }
 
     /**

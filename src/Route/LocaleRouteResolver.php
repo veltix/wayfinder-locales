@@ -10,9 +10,21 @@ use Illuminate\Routing\Router;
 use InvalidArgumentException;
 use Laravel\Ranger\Components\Route as RangerRoute;
 use RuntimeException;
+use Throwable;
 
 final class LocaleRouteResolver
 {
+    /**
+     * The raw `wayfinder-locales.default_locale` config value last resolved,
+     * kept so {@see self::defaultLocale()} can tell whether it needs to
+     * resolve again or may reuse {@see self::$defaultLocaleCache}.
+     */
+    private mixed $defaultLocaleSource = null;
+
+    private bool $defaultLocaleResolved = false;
+
+    private ?string $defaultLocaleCache = null;
+
     public function __construct(
         private readonly Router $router,
         private readonly Repository $config,
@@ -342,15 +354,68 @@ final class LocaleRouteResolver
             && $this->defaultLocale() !== null;
     }
 
-    private function defaultLocale(): ?string
+    /**
+     * The single source of truth for `wayfinder-locales.default_locale`,
+     * used by every other read of that key in this package (the `localized()`
+     * macro and the TypeScript/translation generators included) so the
+     * per-locale route table and the unprefixed twin are never built from two
+     * different values.
+     *
+     * The config value may be a plain string or a `callable(): string`, so a
+     * consuming app can source it from its own storage — a shop setting,
+     * say — resolved at route-registration time instead of baked into
+     * config. It's resolved once per registration pass rather than once per
+     * route: the result is cached for as long as the underlying config value
+     * is unchanged (compared by identity, so a mid-request `config()->set()`
+     * still invalidates it), which keeps a callable backed by a database or a
+     * settings cache from being invoked once per `Route::localized()` call.
+     *
+     * Route registration happens at boot. If the callable throws — its
+     * storage is briefly unavailable, say — that must not take routing down
+     * with it: the throw is swallowed and resolution falls back to the first
+     * configured locale instead.
+     */
+    public function defaultLocale(): ?string
     {
-        $value = $this->config->get('wayfinder-locales.default_locale');
+        $source = $this->config->get('wayfinder-locales.default_locale');
+
+        if ($this->defaultLocaleResolved && $source === $this->defaultLocaleSource) {
+            return $this->defaultLocaleCache;
+        }
+
+        $this->defaultLocaleSource = $source;
+        $this->defaultLocaleResolved = true;
+
+        return $this->defaultLocaleCache = $this->resolveDefaultLocale($source);
+    }
+
+    private function resolveDefaultLocale(mixed $source): ?string
+    {
+        $value = $source;
+
+        if (is_callable($value)) {
+            try {
+                $value = $value();
+            } catch (Throwable) {
+                $value = null;
+            }
+        }
 
         if (is_string($value) && $value !== '') {
             return $value;
         }
 
-        return null;
+        return $this->firstConfiguredLocale();
+    }
+
+    private function firstConfiguredLocale(): ?string
+    {
+        $locales = array_values(array_filter(
+            array_map('strval', (array) $this->config->get('wayfinder-locales.locales', [])),
+            static fn (string $locale): bool => $locale !== '',
+        ));
+
+        return $locales[0] ?? null;
     }
 
     /**
