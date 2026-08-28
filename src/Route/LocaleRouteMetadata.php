@@ -6,6 +6,8 @@ namespace Veltix\WayfinderLocales\Route;
 
 final readonly class LocaleRouteMetadata
 {
+    public const DEFAULT_TWIN_SUFFIX = '.default';
+
     /**
      * @param  list<string>  $locales
      * @param  array<string, string>  $translations

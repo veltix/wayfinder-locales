@@ -18,6 +18,7 @@ use ReflectionProperty;
 use RuntimeException;
 use Veltix\WayfinderLocales\Locale\DefaultLocaleResolver;
 use Veltix\WayfinderLocales\Middleware\SetLocale;
+use Veltix\WayfinderLocales\Route\LocaleRouteMetadata;
 use Veltix\WayfinderLocales\Route\LocaleRouteResolver;
 use Veltix\WayfinderLocales\Wayfinder\LocaleAwareRouteTransformer;
 use Veltix\WayfinderLocales\Wayfinder\TypeScriptEmitterExtension;
@@ -112,11 +113,12 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
             $hideDefault = (bool) config('wayfinder-locales.hide_default_prefix', false);
             $defaultLocale = $localeRouteResolver->defaultLocale();
             $localeParameter = (string) config('wayfinder-locales.locale_parameter', 'locale');
+            $requiredPlaceholder = '{'.$localeParameter.'}';
+            $optionalPlaceholder = '{'.$localeParameter.'?}';
+            $hasLocalePlaceholder = str_contains($this->uri(), $requiredPlaceholder) || str_contains($this->uri(), $optionalPlaceholder);
 
-            if ($hideDefault && is_string($defaultLocale) && $defaultLocale !== '') {
+            if ($hasLocalePlaceholder && $hideDefault && is_string($defaultLocale) && $defaultLocale !== '') {
                 $uri = $this->uri();
-                $requiredPlaceholder = '{'.$localeParameter.'}';
-                $optionalPlaceholder = '{'.$localeParameter.'?}';
 
                 $segments = explode('/', trim($uri, '/'));
                 $stripped = array_values(array_filter(
@@ -144,20 +146,20 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
                 $defaultRoute->defaults($localeParameter, $defaultLocale);
 
                 if ($this->getName() !== null) {
-                    $defaultRoute->name($this->getName().'.default');
+                    $defaultRoute->name($this->getName().LocaleRouteMetadata::DEFAULT_TWIN_SUFFIX);
                 }
 
                 foreach ($this->excludedMiddleware() as $middleware) {
                     $defaultRoute->withoutMiddleware($middleware);
                 }
+            } elseif (! $hasLocalePlaceholder && is_string($defaultLocale) && $defaultLocale !== '') {
+                $this->defaults($localeParameter, $defaultLocale);
             }
 
             /** @var Router $router */
             $router = app(Router::class);
 
             if ($metadata !== null) {
-                $requiredPlaceholder = '{'.$localeParameter.'}';
-                $optionalPlaceholder = '{'.$localeParameter.'?}';
                 $methods = $this->methods();
                 $strict = (bool) config('wayfinder-locales.strict', true);
 

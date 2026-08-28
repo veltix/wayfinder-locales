@@ -2,6 +2,7 @@
 
 use Illuminate\Contracts\Routing\UrlRoutable;
 use Veltix\WayfinderLocales\Locale\DefaultLocaleResolver;
+use Veltix\WayfinderLocales\Route\LocaleRouteMetadata;
 
 if (! function_exists('lroute')) {
     /**
@@ -22,7 +23,7 @@ if (! function_exists('lroute')) {
         $defaultLocale = app(DefaultLocaleResolver::class)->resolve();
 
         if ($defaultLocale !== null && $locale === $defaultLocale) {
-            $defaultName = $name.'.default';
+            $defaultName = $name.LocaleRouteMetadata::DEFAULT_TWIN_SUFFIX;
 
             if ($routes->getByName($defaultName) !== null) {
                 return app('url')->route($defaultName, $parameters, $absolute);
