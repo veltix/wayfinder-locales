@@ -165,3 +165,29 @@ it('does not duplicate a route group prefix when localized() is chained inside a
     expect($localeTwin)->not->toBeNull();
     expect($localeTwin->uri())->toBe('cart/de/artikel');
 });
+
+it('does not duplicate a route group name when localized() is chained inside a still-open group', function (): void {
+    config()->set('wayfinder-locales.hide_default_prefix', true);
+
+    /** @var Router $router */
+    $router = $this->app['router'];
+
+    $router->name('shop.')->group(function (Router $router): void {
+        $router->prefix('cart')->group(function (Router $router): void {
+            $router->middleware('setlocale')
+                ->get('/{locale?}/items', fn () => 'cart:'.app()->getLocale())
+                ->name('items')
+                ->localized(['en' => 'items', 'de' => 'artikel']);
+        });
+    });
+
+    $router->getRoutes()->refreshNameLookups();
+
+    $localeTwin = collect($router->getRoutes()->getRoutes())
+        ->first(fn (IlluminateRoute $route): bool => str_contains((string) $route->getName(), '.locale.de'));
+
+    expect($localeTwin)->not->toBeNull();
+    expect($localeTwin->getName())->toBe('shop.items.locale.de');
+
+    expect(lroute('shop.items', [], 'de', absolute: false))->toBe('/cart/de/artikel');
+});
