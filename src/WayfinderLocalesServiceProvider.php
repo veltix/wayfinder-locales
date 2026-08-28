@@ -14,6 +14,7 @@ use Laravel\Wayfinder\Converters\JsonApiData;
 use Laravel\Wayfinder\Converters\JsonData;
 use Laravel\Wayfinder\Converters\ResourceData;
 use Laravel\Wayfinder\Converters\Routes as WayfinderRoutes;
+use ReflectionProperty;
 use RuntimeException;
 use Veltix\WayfinderLocales\Locale\DefaultLocaleResolver;
 use Veltix\WayfinderLocales\Middleware\SetLocale;
@@ -82,7 +83,20 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
             return;
         }
 
-        IlluminateRoute::macro('localized', function (array $translations): IlluminateRoute {
+        $withoutGroupStack = static function (Router $router, callable $addRoute): IlluminateRoute {
+            $groupStackProperty = new ReflectionProperty($router, 'groupStack');
+            $originalGroupStack = $groupStackProperty->getValue($router);
+
+            $groupStackProperty->setValue($router, []);
+
+            try {
+                return $addRoute();
+            } finally {
+                $groupStackProperty->setValue($router, $originalGroupStack);
+            }
+        };
+
+        IlluminateRoute::macro('localized', function (array $translations) use ($withoutGroupStack): IlluminateRoute {
             /** @var IlluminateRoute $this */
             $action = $this->getAction();
             $actionKey = (string) config('wayfinder-locales.action_key', 'wayfinder_locales');
@@ -123,9 +137,10 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
                 $methods = $this->methods();
                 $routeAction = $this->getAction();
 
-                unset($routeAction['as']);
+                unset($routeAction['as'], $routeAction['prefix'], $routeAction[$actionKey]);
 
-                $defaultRoute = $router->addRoute($methods, $unprefixedUri, $routeAction);
+                $defaultRoute = $withoutGroupStack($router, fn (): IlluminateRoute => $router->addRoute($methods, $unprefixedUri, $routeAction));
+                $defaultRoute->setBindingFields($this->bindingFields());
                 $defaultRoute->defaults($localeParameter, $defaultLocale);
 
                 if ($this->getName() !== null) {
@@ -182,9 +197,10 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
                     }
 
                     $routeAction = $this->getAction();
-                    unset($routeAction['as']);
+                    unset($routeAction['as'], $routeAction['prefix'], $routeAction[$actionKey]);
 
-                    $localeRoute = $router->addRoute($methods, $concreteUri, $routeAction);
+                    $localeRoute = $withoutGroupStack($router, fn (): IlluminateRoute => $router->addRoute($methods, $concreteUri, $routeAction));
+                    $localeRoute->setBindingFields($this->bindingFields());
                     $localeRoute->defaults($localeParameter, $locale);
 
                     if ($localeRouteName !== null) {
