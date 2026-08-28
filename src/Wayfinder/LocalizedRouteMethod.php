@@ -22,6 +22,10 @@ final class LocalizedRouteMethod extends RouteMethod
         private readonly ?string $defaultLocale = null,
     ) {
         parent::__construct($route, $withForm, $withInertiaComponent, $named, $relatedRoutes, $tmpMethod);
+
+        if ($this->metadata !== null && ! $this->routeHasLocaleParameter()) {
+            $this->hasParameters = true;
+        }
     }
 
     public function controllerMethod(): string
@@ -66,6 +70,13 @@ final class LocalizedRouteMethod extends RouteMethod
             $typeObject->key($parameter->name)->value(TypeScript::union($baseTypes))->optional($parameter->optional);
         }
 
+        if (! $this->routeHasLocaleParameter()) {
+            $typeObject
+                ->key($this->metadata->localeParameter)
+                ->value($this->metadata->localeUnionType())
+                ->optional($this->metadata->localeOptional);
+        }
+
         $argTypes = [$typeObject, $tuple];
 
         if ($this->route->parameters()->count() === 1) {
@@ -89,16 +100,38 @@ final class LocalizedRouteMethod extends RouteMethod
 
         $url = $this->fillOptionalLocale($url);
 
-        return str_replace(
-            "return {$this->name}.definition.url",
-            sprintf(
-                'return (%s[%s.%s] ?? %s.definition.url)',
-                $this->localizedTemplatesVariableName(),
-                $this->parsedArgsParam,
+        $routeCarriesLocale = $this->routeHasLocaleParameter();
+
+        $localeExpression = $routeCarriesLocale
+            ? "{$this->parsedArgsParam}.{$this->metadata->localeParameter}"
+            : "{$this->argsParam}?.{$this->metadata->localeParameter}";
+
+        $lookup = sprintf(
+            'return (%s[%s] ?? %s.definition.url)',
+            $this->localizedTemplatesVariableName(),
+            $localeExpression,
+            $this->name,
+        );
+
+        if (! $routeCarriesLocale) {
+            $lookup .= PHP_EOL.TypeScript::indent(sprintf(
+                '.replace("{%s?}", (%s ?? "").toString())',
                 $this->metadata->localeParameter,
-                $this->name,
-            ),
-            $url,
+                $localeExpression,
+            ));
+        }
+
+        return str_replace("return {$this->name}.definition.url", $lookup, $url);
+    }
+
+    private function routeHasLocaleParameter(): bool
+    {
+        if ($this->metadata === null) {
+            return false;
+        }
+
+        return $this->route->parameters()->contains(
+            fn ($parameter) => $parameter->name === $this->metadata->localeParameter,
         );
     }
 
