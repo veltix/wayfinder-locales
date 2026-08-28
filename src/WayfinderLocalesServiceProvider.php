@@ -15,6 +15,7 @@ use Laravel\Wayfinder\Converters\JsonData;
 use Laravel\Wayfinder\Converters\ResourceData;
 use Laravel\Wayfinder\Converters\Routes as WayfinderRoutes;
 use RuntimeException;
+use Veltix\WayfinderLocales\Locale\DefaultLocaleResolver;
 use Veltix\WayfinderLocales\Middleware\SetLocale;
 use Veltix\WayfinderLocales\Route\LocaleRouteResolver;
 use Veltix\WayfinderLocales\Wayfinder\LocaleAwareRouteTransformer;
@@ -26,13 +27,18 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/wayfinder-locales.php', 'wayfinder-locales');
 
-        $this->app->singleton(LocaleRouteResolver::class, fn ($app): LocaleRouteResolver => new LocaleRouteResolver(
-            router: $app->make(Router::class),
+        $this->app->singleton(DefaultLocaleResolver::class, fn ($app): DefaultLocaleResolver => new DefaultLocaleResolver(
             config: $app->make(Repository::class),
         ));
 
+        $this->app->singleton(LocaleRouteResolver::class, fn ($app): LocaleRouteResolver => new LocaleRouteResolver(
+            router: $app->make(Router::class),
+            config: $app->make(Repository::class),
+            defaultLocaleResolver: $app->make(DefaultLocaleResolver::class),
+        ));
+
         $this->app->singleton(TypeScriptEmitterExtension::class, fn ($app): TypeScriptEmitterExtension => new TypeScriptEmitterExtension(
-            localeRouteResolver: $app->make(LocaleRouteResolver::class),
+            defaultLocaleResolver: $app->make(DefaultLocaleResolver::class),
         ));
 
         $this->app->bind(WayfinderRoutes::class, fn ($app): WayfinderRoutes => new LocaleAwareRouteTransformer(

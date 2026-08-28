@@ -10,23 +10,14 @@ use Illuminate\Routing\Router;
 use InvalidArgumentException;
 use Laravel\Ranger\Components\Route as RangerRoute;
 use RuntimeException;
-use Throwable;
+use Veltix\WayfinderLocales\Locale\DefaultLocaleResolver;
 
 final class LocaleRouteResolver
 {
-    /**
-     * kept so {@see self::defaultLocale()} can tell whether it needs to
-     * resolve again or may reuse {@see self::$defaultLocaleCache}.
-     */
-    private mixed $defaultLocaleSource = null;
-
-    private bool $defaultLocaleResolved = false;
-
-    private ?string $defaultLocaleCache = null;
-
     public function __construct(
         private readonly Router $router,
         private readonly Repository $config,
+        private readonly DefaultLocaleResolver $defaultLocaleResolver,
     ) {}
 
     public function resolveForRangerRoute(RangerRoute $rangerRoute): ?LocaleRouteMetadata
@@ -350,45 +341,7 @@ final class LocaleRouteResolver
 
     public function defaultLocale(): ?string
     {
-        $source = $this->config->get('wayfinder-locales.default_locale');
-
-        if ($this->defaultLocaleResolved && $source === $this->defaultLocaleSource) {
-            return $this->defaultLocaleCache;
-        }
-
-        $this->defaultLocaleSource = $source;
-        $this->defaultLocaleResolved = true;
-
-        return $this->defaultLocaleCache = $this->resolveDefaultLocale($source);
-    }
-
-    private function resolveDefaultLocale(mixed $source): ?string
-    {
-        $value = $source;
-
-        if (is_callable($value)) {
-            try {
-                $value = $value();
-            } catch (Throwable) {
-                $value = null;
-            }
-        }
-
-        if (is_string($value) && $value !== '') {
-            return $value;
-        }
-
-        return $this->firstConfiguredLocale();
-    }
-
-    private function firstConfiguredLocale(): ?string
-    {
-        $locales = array_values(array_filter(
-            array_map('strval', (array) $this->config->get('wayfinder-locales.locales', [])),
-            static fn (string $locale): bool => $locale !== '',
-        ));
-
-        return $locales[0] ?? null;
+        return $this->defaultLocaleResolver->resolve();
     }
 
     /**
