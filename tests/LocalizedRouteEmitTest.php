@@ -36,6 +36,14 @@ defineRoutes(function (Router $router): void {
         ->localized(['en' => 'about', 'de' => 'ueber-uns']);
 
     $router->get('/status', fn () => 'ok')->name('status');
+
+    $router->get('/product/{product}', fn () => 'ok')
+        ->name('product.show')
+        ->localized(['en' => 'product', 'de' => 'produkt']);
+
+    $router->get('/catalog', fn () => 'ok')
+        ->name('catalog.listing')
+        ->localized(['en' => 'catalog', 'de' => 'katalog']);
 });
 
 function localizedRouteEmitExtension(): TypeScriptEmitterExtension
@@ -43,7 +51,7 @@ function localizedRouteEmitExtension(): TypeScriptEmitterExtension
     $extension = app(TypeScriptEmitterExtension::class);
     $resolver = app(LocaleRouteResolver::class);
 
-    foreach (['products', 'about', 'status'] as $name) {
+    foreach (['products', 'about', 'status', 'product.show', 'catalog.listing'] as $name) {
         $route = rangerRouteNamed($name);
         $metadata = $resolver->resolveForRangerRoute($route);
 
@@ -105,4 +113,65 @@ it('leaves untagged routes to wayfinders own method', function (): void {
 it('uses the localized method for tagged routes', function (): void {
     expect(localizedRouteEmitExtension()->makeRouteMethod(rangerRouteNamed('products'), withForm: false, named: true))
         ->toBeInstanceOf(LocalizedRouteMethod::class);
+});
+
+it('adds locale to the args type for a route declared without a locale placeholder', function (): void {
+    $emitted = emittedMethod('product.show');
+
+    expect($emitted)->toContain('{ product: string | number, locale?: "en" | "de" }');
+});
+
+it('reads locale off args, not parsedArgs, for a route declared without a locale placeholder', function (): void {
+    $emitted = emittedMethod('product.show');
+
+    expect($emitted)->toContain(
+        'return (showLocalizedTemplates[args?.locale ?? "en"] ?? show.definition.url)',
+    );
+    expect($emitted)->not->toContain('showLocalizedTemplates[parsedArgs.locale]');
+});
+
+it('substitutes the locale token left in a placeholder-free per-locale template', function (): void {
+    $emitted = emittedMethod('product.show');
+
+    expect($emitted)->toContain(
+        'const showLocalizedTemplates = { en: "/product/{product}", de: "/{locale?}/produkt/{product}" } as const',
+    );
+    expect($emitted)->toContain('.replace("{locale?}", (args?.locale ?? "").toString())');
+});
+
+it('selects the german template rather than falling through to the definition for a placeholder-free route', function (): void {
+    $emitted = emittedMethod('product.show');
+
+    $lookup = "return (showLocalizedTemplates[args?.locale ?? \"en\"] ?? show.definition.url)\n"
+        .'    .replace("{locale?}", (args?.locale ?? "").toString())';
+
+    expect($emitted)->toContain($lookup);
+    expect($emitted)->toContain('de: "/{locale?}/produkt/{product}"');
+});
+
+it('gives a placeholder-free route with no other parameters an args slot for locale', function (): void {
+    $emitted = emittedMethod('catalog.listing');
+
+    expect($emitted)->toContain('export const listing = (args?: { locale?: "en" | "de" } | [  ]');
+    expect($emitted)->toContain(
+        'return (listingLocalizedTemplates[args?.locale ?? "en"] ?? listing.definition.url)',
+    );
+    expect($emitted)->toContain('.replace("{locale?}", (args?.locale ?? "").toString())');
+});
+
+it('leaves the placeholder form untouched by the placeholder-free locale-argument fix', function (): void {
+    $emitted = emittedMethod('products');
+
+    expect($emitted)->toContain('return (productsLocalizedTemplates[parsedArgs.locale] ?? products.definition.url)');
+    expect($emitted)->not->toContain('parsedArgs.locale] ?? products.definition.url)'.PHP_EOL.'    .replace("{locale?}"');
+});
+
+it('falls the index lookup back to the default locale so the optional locale placeholder form narrows too', function (): void {
+    expect(emittedMethod('about'))->toContain(
+        'return (aboutLocalizedTemplates[parsedArgs.locale ?? "en"] ?? about.definition.url)',
+    );
+});
+
+it('does not add a fallback to the index lookup for a route whose locale placeholder is required', function (): void {
+    expect(emittedMethod('products'))->not->toContain('parsedArgs.locale ?? "en"');
 });

@@ -23,6 +23,11 @@ final class TypeScriptEmitterExtension
         $this->metadataByRouteKey[$this->routeKey($route)] = $metadata;
     }
 
+    public function metadataFor(RangerRoute $route): ?LocaleRouteMetadata
+    {
+        return $this->metadataByRouteKey[$this->routeKey($route)] ?? null;
+    }
+
     public function makeRouteMethod(
         RangerRoute $route,
         bool $withForm,

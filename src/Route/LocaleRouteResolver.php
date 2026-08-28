@@ -64,22 +64,22 @@ final class LocaleRouteResolver
         $uri = $route->uri();
         [$hasLocaleParameter, $localeOptional] = $this->detectLocaleParameter($uri, $this->localeParameter());
 
-        if (! $hasLocaleParameter) {
-            return $this->strict()
-                ? throw new RuntimeException(sprintf(
-                    'Route [%s] uses localized() but does not contain {%s} or {%s?}.',
-                    $route->getName() ?? $uri,
-                    $this->localeParameter(),
-                    $this->localeParameter(),
-                ))
-                : null;
+        $defaultLocale = $this->defaultLocale();
+
+        if ($hasLocaleParameter) {
+            $hideDefault = $this->hideDefaultPrefix();
+            $resolutionUri = $uri;
+        } else {
+            $hideDefault = $defaultLocale !== null;
+            $localeOptional = true;
+            $resolutionUri = $this->withVirtualLocalePrefix($route, $uri);
         }
 
         $mode = $this->mode();
 
         $localizedUris = match ($mode) {
-            'segment' => $this->buildSegmentModeUris($uri, $this->localeParameter(), $translations),
-            'tail' => $this->buildTailModeUris($uri, $this->localeParameter(), $translations),
+            'segment' => $this->buildSegmentModeUris($resolutionUri, $this->localeParameter(), $translations, $hideDefault, $defaultLocale),
+            'tail' => $this->buildTailModeUris($resolutionUri, $this->localeParameter(), $translations, $hideDefault, $defaultLocale),
             default => throw new InvalidArgumentException(sprintf('Unsupported wayfinder-locales mode [%s].', $mode)),
         };
 
@@ -184,11 +184,33 @@ final class LocaleRouteResolver
         return [false, false];
     }
 
+    private function withVirtualLocalePrefix(IlluminateRoute $route, string $uri): string
+    {
+        $localePlaceholder = '{'.$this->localeParameter().'?}';
+        $groupPrefix = trim((string) ($route->getAction('prefix') ?? ''), '/');
+
+        if ($groupPrefix === '') {
+            return $localePlaceholder.'/'.trim($uri, '/');
+        }
+
+        $localUri = trim($uri, '/');
+
+        if ($localUri === $groupPrefix) {
+            $localUri = '';
+        } elseif (str_starts_with($localUri, $groupPrefix.'/')) {
+            $localUri = substr($localUri, strlen($groupPrefix) + 1);
+        }
+
+        return $localUri === ''
+            ? $groupPrefix.'/'.$localePlaceholder
+            : $groupPrefix.'/'.$localePlaceholder.'/'.$localUri;
+    }
+
     /**
      * @param  array<string, string>  $translations
      * @return array<string, string>
      */
-    private function buildSegmentModeUris(string $uri, string $localeParameter, array $translations): array
+    private function buildSegmentModeUris(string $uri, string $localeParameter, array $translations, bool $hideDefault, ?string $defaultLocale): array
     {
         $segments = explode('/', trim($uri, '/'));
         $targetIndex = $this->findStaticSegmentAfterLocale($segments, $localeParameter);
@@ -203,9 +225,6 @@ final class LocaleRouteResolver
 
             return [];
         }
-
-        $hideDefault = $this->hideDefaultPrefix();
-        $defaultLocale = $this->defaultLocale();
 
         $output = [];
 
@@ -227,7 +246,7 @@ final class LocaleRouteResolver
      * @param  array<string, string>  $translations
      * @return array<string, string>
      */
-    private function buildTailModeUris(string $uri, string $localeParameter, array $translations): array
+    private function buildTailModeUris(string $uri, string $localeParameter, array $translations, bool $hideDefault, ?string $defaultLocale): array
     {
         $segments = explode('/', trim($uri, '/'));
         $localeIndex = $this->findLocaleSegmentIndex($segments, $localeParameter);
@@ -243,9 +262,6 @@ final class LocaleRouteResolver
             $suffix,
             static fn (string $segment): bool => str_starts_with($segment, '{') && str_ends_with($segment, '}'),
         ));
-
-        $hideDefault = $this->hideDefaultPrefix();
-        $defaultLocale = $this->defaultLocale();
 
         $output = [];
 

@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Contracts\Routing\UrlRoutable;
+use Veltix\WayfinderLocales\Locale\DefaultLocaleResolver;
+use Veltix\WayfinderLocales\Route\LocaleRouteMetadata;
 
 if (! function_exists('lroute')) {
     /**
@@ -16,6 +18,16 @@ if (! function_exists('lroute')) {
 
         if ($routes->getByName($localizedName) !== null) {
             return app('url')->route($localizedName, $parameters, $absolute);
+        }
+
+        $defaultLocale = app(DefaultLocaleResolver::class)->resolve();
+
+        if ($defaultLocale !== null && $locale === $defaultLocale) {
+            $defaultName = $name.LocaleRouteMetadata::DEFAULT_TWIN_SUFFIX;
+
+            if ($routes->getByName($defaultName) !== null) {
+                return app('url')->route($defaultName, $parameters, $absolute);
+            }
         }
 
         $route = $routes->getByName($name);

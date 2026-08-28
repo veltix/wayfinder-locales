@@ -41,12 +41,13 @@ The service provider is auto-discovered. On boot it registers:
 The two halves of the package are independent, and only one of them generates files.
 
 **Routes.** `Route::localized()` tags the route with a per-locale path segment map and registers a
-concrete route per locale — `/de/produkte` alongside the original `{locale}`-parameterised
-`/en/products` — so the translated URLs the frontend actually visits are matched inbound by
-Laravel's own router, not just emitted outbound. At generation time the same metadata drives the
-package's converter — bound over Wayfinder's `Converters\Routes` — which turns it into a template
-table the generated function picks from. So localized routes come out of `wayfinder:generate`, not
-out of a second generator.
+concrete route per locale — `/de/produkte` alongside the original English route (`/en/products` if
+the URI declares a `{locale}` placeholder, plain `/products` if it doesn't — see
+[Localized routes](#localized-routes) for both forms) — so the translated URLs the frontend
+actually visits are matched inbound by Laravel's own router, not just emitted outbound. At
+generation time the same metadata drives the package's converter — bound over Wayfinder's
+`Converters\Routes` — which turns it into a template table the generated function picks from. So
+localized routes come out of `wayfinder:generate`, not out of a second generator.
 
 **Translations.** `wayfinder-locales:generate` reads `lang/` and writes the frontend catalogs. It
 has nothing to do with routing and never writes into `resources/js/wayfinder` — that directory is
@@ -89,9 +90,38 @@ return [
 
 ## Localized routes
 
+`localized()` accepts a route declared either of two ways. **Prefer the placeholder-free form** —
+it's the one that leaves your existing `route()` calls alone.
+
+### Without a locale placeholder (preferred)
+
 ```php
 use Illuminate\Support\Facades\Route;
 
+Route::middleware('setlocale')->group(function () {
+    Route::get('/products', [ProductController::class, 'index'])
+        ->name('products')
+        ->localized(['en' => 'products', 'de' => 'produkte']);
+
+    Route::get('/products/{product}', [ProductController::class, 'show'])
+        ->name('products.show')
+        ->localized(['en' => 'products', 'de' => 'produkte']);
+});
+```
+
+The declared URI carries no locale segment. `localized()` prepends the locale prefix itself when
+it builds each per-locale twin — `/de/produkte` alongside the original, unmodified `/products` —
+so the base route's parameter list is untouched. Adding `localized()` to a route declared this way
+never changes what `route('products.show', $product)` does.
+
+For every locale other than the default, `localized()` registers a concrete twin route —
+`products.locale.de` at `/de/produkte` — so inbound requests match the translated URL. The
+default locale needs no twin: the route as declared already serves it, unprefixed, independently
+of `hide_default_prefix`.
+
+### With a `{locale}` placeholder
+
+```php
 Route::middleware('setlocale')->group(function () {
     Route::get('/{locale}/products', [ProductController::class, 'index'])
         ->name('products')
@@ -105,22 +135,32 @@ Route::middleware('setlocale')->group(function () {
 
 Use `{locale?}` if the segment may be omitted; the generated function fills in `default_locale`.
 
-With `hide_default_prefix => true` and `default_locale => 'en'`, `localized()` also registers an
-unprefixed twin named `products.default` bound to `en`, so `/products` and `/en/products` both
-resolve.
+This form makes `locale` a real route parameter, which matters if other code reads it off the
+route directly (`$route->parameter('locale')`). It has a cost applying it to an **existing**
+route: `{locale}`/`{locale?}` becomes that route's first parameter, and Laravel's `route()` maps
+positional arguments by position — so `route('products.show', $product)` now binds `$product` to
+`locale` instead, and every positional call site for that route has to be found and rewritten to
+pass `locale` explicitly. On a route with several call sites, that migration is easy to miss
+until it breaks at runtime. The placeholder-free form doesn't have this cost, which is why it's
+the default recommendation above.
 
-`localized()` also registers a concrete route per locale — `products.locale.de` at `/de/produkte`,
-alongside `products.locale.en` — so inbound requests match the translated URLs the generated
-client actually visits, without a routing middleware rewriting the request. If a route already
-has that exact name, the new one is silently shadowed (first registered wins) unless `strict` is
-on, in which case registration throws instead — the same exposure `products.default` already has.
-These per-locale routes exist purely for matching; they are excluded from Wayfinder's generated
-output, so they never produce a client-callable function of their own.
+This form also registers a `products.locale.de` twin for German, exactly like the placeholder-free
+form does. The default locale differs by config: with `hide_default_prefix => true` and
+`default_locale => 'en'`, `localized()` registers an *unprefixed* twin named `products.default`
+bound to `en`, so `/products` and `/en/products` both resolve. With `hide_default_prefix => false`
+(the default), the default locale gets its own `products.locale.en` twin at `/en/products` instead,
+same as every other locale.
 
-Registering one route per locale multiplies your route table by the number of configured
-locales — a two-locale route becomes three entries (the original `{locale}`-parameterised route
-plus one concrete route per locale), visible in `php artisan route:list`. Fine at the route counts
-most apps have; worth knowing if you have both many routes and many locales.
+However it's named, if a route already has that exact name, the new one is silently shadowed
+(first registered wins) unless `strict` is on, in which case registration throws instead. These
+per-locale twin routes exist purely for inbound matching; they are excluded from Wayfinder's
+generated output, so they never produce a client-callable function of their own.
+
+Registering one route per locale multiplies your route table by roughly the number of configured
+locales — visible in `php artisan route:list`. (Roughly: the placeholder-free form's default
+locale reuses the declared route rather than adding a twin, so a two-locale route becomes two
+entries in that form and three in the `{locale}` form.) Fine at the route counts most apps have;
+worth knowing if you have both many routes and many locales.
 
 Then run Wayfinder as usual:
 
