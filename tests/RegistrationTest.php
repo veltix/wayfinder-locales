@@ -2,70 +2,48 @@
 
 declare(strict_types=1);
 
-namespace Veltix\WayfinderLocales\Tests;
-
 use Illuminate\Routing\Route as IlluminateRoute;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Wayfinder\Converters\Routes as WayfinderRoutes;
-use PHPUnit\Framework\Attributes\Test;
 use Veltix\WayfinderLocales\Wayfinder\LocaleAwareRouteTransformer;
 
-class RegistrationTest extends TestCase
-{
-    #[Test]
-    public function it_registers_the_generate_command(): void
-    {
-        $this->assertArrayHasKey('wayfinder-locales:generate', Artisan::all());
-    }
+it('registers the generate command', function (): void {
+    expect(Artisan::all())->toHaveKey('wayfinder-locales:generate');
+});
 
-    #[Test]
-    public function it_no_longer_registers_the_stable_line_sync_segments_command(): void
-    {
-        $this->assertArrayNotHasKey('wayfinder-i18n:sync-segments', Artisan::all());
-        $this->assertArrayNotHasKey('wayfinder-locales:sync-segments', Artisan::all());
-    }
+it('no longer registers the stable line sync segments command', function (): void {
+    expect(Artisan::all())
+        ->not->toHaveKey('wayfinder-i18n:sync-segments')
+        ->not->toHaveKey('wayfinder-locales:sync-segments');
+});
 
-    #[Test]
-    public function it_merges_one_config_file(): void
-    {
-        $this->assertSame(['en'], config('wayfinder-locales.locales'));
-        $this->assertSame('en', config('wayfinder-locales.default_locale'));
-        $this->assertSame('segment', config('wayfinder-locales.mode'));
-        $this->assertSame('locale', config('wayfinder-locales.locale_parameter'));
-        $this->assertSame('wayfinder_locales', config('wayfinder-locales.action_key'));
-        $this->assertSame(['routes'], config('wayfinder-locales.exclude_groups'));
-        $this->assertFalse(config('wayfinder-locales.hide_default_prefix'));
-    }
+it('merges one config file', function (): void {
+    expect(config('wayfinder-locales.locales'))->toBe(['en']);
+    expect(config('wayfinder-locales.default_locale'))->toBe('en');
+    expect(config('wayfinder-locales.mode'))->toBe('segment');
+    expect(config('wayfinder-locales.locale_parameter'))->toBe('locale');
+    expect(config('wayfinder-locales.action_key'))->toBe('wayfinder_locales');
+    expect(config('wayfinder-locales.exclude_groups'))->toBe(['routes']);
+    expect(config('wayfinder-locales.hide_default_prefix'))->toBeFalse();
+});
 
-    #[Test]
-    public function it_does_not_merge_a_second_config_file(): void
-    {
-        $this->assertNull(config('wayfinder-i18n'));
-    }
+it('does not merge a second config file', function (): void {
+    expect(config('wayfinder-i18n'))->toBeNull();
+});
 
-    #[Test]
-    public function it_publishes_the_config_under_one_tag(): void
-    {
-        $groups = ServiceProvider::publishableGroups();
+it('publishes the config under one tag', function (): void {
+    $groups = ServiceProvider::publishableGroups();
 
-        $this->assertContains('wayfinder-locales-config', $groups);
-        $this->assertNotContains('wayfinder-i18n-config', $groups);
-    }
+    expect($groups)->toContain('wayfinder-locales-config');
+    expect($groups)->not->toContain('wayfinder-i18n-config');
+});
 
-    #[Test]
-    public function it_registers_the_localized_route_macro_and_setlocale_alias(): void
-    {
-        $this->assertTrue(IlluminateRoute::hasMacro('localized'));
-        $this->assertArrayHasKey('setlocale', $this->app['router']->getMiddleware());
-    }
+it('registers the localized route macro and setlocale alias', function (): void {
+    expect(IlluminateRoute::hasMacro('localized'))->toBeTrue();
+    expect($this->app['router']->getMiddleware())->toHaveKey('setlocale');
+});
 
-    #[Test]
-    public function it_binds_the_locale_aware_routes_converter_over_wayfinders(): void
-    {
-        $this->assertInstanceOf(
-            LocaleAwareRouteTransformer::class,
-            $this->app->make(WayfinderRoutes::class),
-        );
-    }
-}
+it('binds the locale aware routes converter over wayfinders', function (): void {
+    expect($this->app->make(WayfinderRoutes::class))->toBeInstanceOf(LocaleAwareRouteTransformer::class);
+});

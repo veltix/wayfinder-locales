@@ -22,7 +22,10 @@
     },
     "require-dev": {
         "laravel/pint": "^1.29",
-        "orchestra/testbench": "^10.1|^11.0"
+        "orchestra/pest-plugin-testbench": "^5",
+        "orchestra/testbench": "^10.1|^11.0",
+        "pestphp/pest": "^5",
+        "pestphp/pest-plugin-laravel": "^5"
     },
     "autoload": {
         "psr-4": {
@@ -52,6 +55,9 @@
     "prefer-stable": true,
     "config": {
         "preferred-install": "dist",
-        "sort-packages": true
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
     }
 }
