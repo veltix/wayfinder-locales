@@ -1,0 +1,7 @@
+{
+    "name": "wayfinder-locales-dev",
+    "private": true,
+    "devDependencies": {
+        "typescript": "^5.7"
+    }
+}
