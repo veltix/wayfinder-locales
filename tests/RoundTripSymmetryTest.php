@@ -380,6 +380,11 @@ function placeholderFreeLocalizedRouteTable(): Collection
 function registerPlaceholderFreeShapeRoutes(Router $router): void
 {
     $router->middleware('setlocale')
+        ->get('/', fn () => 'home:'.app()->getLocale())
+        ->name('home')
+        ->localized(['en' => '', 'de' => '']);
+
+    $router->middleware('setlocale')
         ->get('/product/{product:slug}', fn () => 'product.show:'.app()->getLocale().':'.request()->route('product'))
         ->name('product.show')
         ->localized(['en' => 'product', 'de' => 'produkt']);
@@ -403,7 +408,7 @@ function registerPlaceholderFreeShapeRoutes(Router $router): void
     $router->getRoutes()->refreshNameLookups();
 }
 
-it('round-trips grouped, named, and binding-hint route shapes declared without a locale placeholder, for every locale, through both generators', function (): void {
+it('round-trips grouped, named, binding-hint, and root route shapes declared without a locale placeholder, for every locale, through both generators', function (): void {
     registerPlaceholderFreeShapeRoutes($this->app['router']);
 
     $locales = (array) config('wayfinder-locales.locales', []);
@@ -421,6 +426,7 @@ it('round-trips grouped, named, and binding-hint route shapes declared without a
     ];
 
     $expectedContentByName = [
+        'home' => fn (string $locale): string => "home:{$locale}",
         'product.show' => fn (string $locale): string => "product.show:{$locale}:the-product",
         'catalog.listing' => fn (string $locale): string => "catalog.listing:{$locale}",
         'shop.confirm' => fn (string $locale): string => "shop.confirm:{$locale}",
