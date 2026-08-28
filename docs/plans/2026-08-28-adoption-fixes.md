@@ -61,9 +61,17 @@ Run: `vendor/bin/pest --filter AdoptionShapesTest`
 - Modify: `src/WayfinderLocalesServiceProvider.php`
 - Test: `tests/AdoptionShapesTest.php` (turns green)
 
-All three bugs share one cause: the twin is built by copying the parent's action wholesale. Strip what belongs to the parent alone — its name, its resolved `prefix`, and its translations map — and restore what `addRoute()` cannot infer, the binding fields.
+**There are two independent mechanisms, and the captured vendor patch only addresses one.** Task 1 established this by hand-simulating the patch inside an open `Route::prefix('cart')->group()` and watching the twin still come out wrong:
 
-The vendor patch does exactly this. Take its approach and its reasoning; write your own tests.
+1. **The copied action.** `Route::__construct()` re-applies the parent's stale `'prefix'` key, and the inherited translations map makes a later `resolveForRoute()` on the concrete twin throw. Strip what belongs to the parent alone — its name, its resolved `prefix`, its translations map — and restore what `addRoute()` cannot infer, the binding fields. **This is what the vendor patch fixes.**
+
+2. **The router's live group stack.** `Router::createRoute()` calls `$this->prefix($uri)` and applies the current group's name prefix, reading the router's *live* state — entirely independent of the action array. When `->localized()` is chained inline inside a still-open group closure, that state is still active, so a fully-resolved twin URI gets prefixed again. Result: `cart/cart/cart/items` (triple, not double) and a name of `shop.shop.items.default`, which is **unreachable under its intended name**.
+
+Mechanism 2 is the one that matters for adoption, because the consuming app declares every shop route inside `Route::name('shop.')->group(...)`, so `->localized()` is always chained inline there. A misnamed twin also means `lroute()` cannot find it and silently falls back to the parent — emitting untranslated URLs, which is the very bug this package exists to fix.
+
+Suspending and restoring the router's group stack around `localized()`'s `addRoute()` calls is the obvious candidate for mechanism 2, and may close both the URI and the name duplication at once. Task 1's report says whether it does.
+
+Take the vendor patch's approach and reasoning for mechanism 1; write your own tests for both.
 
 - [ ] **Step 1: Make Task 1's three tests pass**
 
