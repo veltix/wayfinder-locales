@@ -99,6 +99,7 @@ final class LocalizedRouteMethod extends RouteMethod
         }
 
         $url = $this->fillOptionalLocale($url);
+        $url = $this->stripUnusedParsedArgsForRouteWithNoRealParameters($url);
 
         $routeCarriesLocale = $this->routeHasLocaleParameter();
 
@@ -106,10 +107,14 @@ final class LocalizedRouteMethod extends RouteMethod
             ? "{$this->parsedArgsParam}.{$this->metadata->localeParameter}"
             : "{$this->argsParam}?.{$this->metadata->localeParameter}";
 
+        $indexExpression = $this->metadata->localeOptional
+            ? sprintf('%s ?? "%s"', $localeExpression, $this->fallbackLocaleForIndexNarrowing())
+            : $localeExpression;
+
         $lookup = sprintf(
             'return (%s[%s] ?? %s.definition.url)',
             $this->localizedTemplatesVariableName(),
-            $localeExpression,
+            $indexExpression,
             $this->name,
         );
 
@@ -132,6 +137,25 @@ final class LocalizedRouteMethod extends RouteMethod
 
         return $this->route->parameters()->contains(
             fn ($parameter) => $parameter->name === $this->metadata->localeParameter,
+        );
+    }
+
+    private function fallbackLocaleForIndexNarrowing(): string
+    {
+        return $this->defaultLocale ?? $this->metadata->locales[0];
+    }
+
+    private function stripUnusedParsedArgsForRouteWithNoRealParameters(string $url): string
+    {
+        if ($this->routeHasLocaleParameter() || $this->route->parameters()->isNotEmpty()) {
+            return $url;
+        }
+
+        return (string) preg_replace(
+            '/^[ \t]*const '.preg_quote($this->parsedArgsParam, '/').' = \{\}[ \t]*\n/m',
+            '',
+            $url,
+            1,
         );
     }
 
