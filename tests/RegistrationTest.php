@@ -11,11 +11,6 @@ use Laravel\Wayfinder\Converters\Routes as WayfinderRoutes;
 use PHPUnit\Framework\Attributes\Test;
 use Veltix\WayfinderLocales\Wayfinder\LocaleAwareRouteTransformer;
 
-/**
- * The defect this release exists to fix: under dev-next the provider returned
- * from `boot()` before registering anything, so the whole translation pipeline
- * was unreachable — `wayfinder-i18n:generate` simply did not exist.
- */
 class RegistrationTest extends TestCase
 {
     #[Test]
@@ -43,10 +38,6 @@ class RegistrationTest extends TestCase
         $this->assertFalse(config('wayfinder-locales.hide_default_prefix'));
     }
 
-    /**
-     * The locale list used to live in a second config the dev-next provider
-     * never merged. If `wayfinder-i18n` comes back, so does that bug.
-     */
     #[Test]
     public function it_does_not_merge_a_second_config_file(): void
     {
@@ -69,11 +60,6 @@ class RegistrationTest extends TestCase
         $this->assertArrayHasKey('setlocale', $this->app['router']->getMiddleware());
     }
 
-    /**
-     * Route generation is Wayfinder's; the package only swaps the converter it
-     * uses. If this binding is lost, localized URLs silently stop being emitted
-     * while `wayfinder:generate` still reports success.
-     */
     #[Test]
     public function it_binds_the_locale_aware_routes_converter_over_wayfinders(): void
     {

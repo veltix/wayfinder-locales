@@ -15,7 +15,6 @@ use Throwable;
 final class LocaleRouteResolver
 {
     /**
-     * The raw `wayfinder-locales.default_locale` config value last resolved,
      * kept so {@see self::defaultLocale()} can tell whether it needs to
      * resolve again or may reuse {@see self::$defaultLocaleCache}.
      */
@@ -49,7 +48,6 @@ final class LocaleRouteResolver
      * Same computation as {@see self::resolveForRangerRoute()}, for callers
      * that already hold the concrete {@see IlluminateRoute} and have no need
      * to round-trip it through a {@see RangerRoute} wrapper just to look it
-     * back up by name or URI.
      */
     public function resolveForRoute(IlluminateRoute $route): ?LocaleRouteMetadata
     {
@@ -125,10 +123,6 @@ final class LocaleRouteResolver
         /** @var list<IlluminateRoute> $all */
         $all = $routes->getRoutes();
 
-        // `Laravel\Ranger\Components\Route::uri()` always carries a leading
-        // slash (and never a trailing one); the native `Illuminate\Routing\
-        // Route::uri()` never has either. Compare both trimmed, or this never
-        // matches anything.
         $target = trim($rangerRoute->uri(), '/');
 
         foreach ($all as $route) {
@@ -354,27 +348,6 @@ final class LocaleRouteResolver
             && $this->defaultLocale() !== null;
     }
 
-    /**
-     * The single source of truth for `wayfinder-locales.default_locale`,
-     * used by every other read of that key in this package (the `localized()`
-     * macro and the TypeScript/translation generators included) so the
-     * per-locale route table and the unprefixed twin are never built from two
-     * different values.
-     *
-     * The config value may be a plain string or a `callable(): string`, so a
-     * consuming app can source it from its own storage — a shop setting,
-     * say — resolved at route-registration time instead of baked into
-     * config. It's resolved once per registration pass rather than once per
-     * route: the result is cached for as long as the underlying config value
-     * is unchanged (compared by identity, so a mid-request `config()->set()`
-     * still invalidates it), which keeps a callable backed by a database or a
-     * settings cache from being invoked once per `Route::localized()` call.
-     *
-     * Route registration happens at boot. If the callable throws — its
-     * storage is briefly unavailable, say — that must not take routing down
-     * with it: the throw is swallowed and resolution falls back to the first
-     * configured locale instead.
-     */
     public function defaultLocale(): ?string
     {
         $source = $this->config->get('wayfinder-locales.default_locale');

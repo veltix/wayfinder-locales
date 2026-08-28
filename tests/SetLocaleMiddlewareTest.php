@@ -6,16 +6,10 @@ namespace Veltix\WayfinderLocales\Tests;
 
 use PHPUnit\Framework\Attributes\Test;
 
-/**
- * dev-next serves localized routes as a single `{locale}`-parameterised URI, so
- * the locale arrives as a route parameter. Only the unprefixed twin that
- * `hide_default_prefix` generates carries it as a route default.
- */
 class SetLocaleMiddlewareTest extends TestCase
 {
     protected function defineEnvironment($app): void
     {
-        // Distinct from every configured locale, so "unchanged" is provable.
         $app['config']->set('app.locale', 'zz');
         $app['config']->set('wayfinder-locales.locales', ['en', 'de']);
         $app['config']->set('wayfinder-locales.default_locale', 'en');

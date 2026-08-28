@@ -56,17 +56,6 @@ final class LocaleAwareRouteTransformer extends BaseRoutes
         return parent::convert($routes);
     }
 
-    /**
-     * Per-locale concrete routes (`{name}.locale.{locale}`, registered by the
-     * `localized()` macro purely so inbound requests match) are plumbing, not
-     * client API — that's the combined `products.url({ locale: 'de' })`
-     * already produced from the tagged base route. Emitting a further named
-     * export per locale would grow with the locale count for something
-     * nothing is meant to call directly, and — carrying the same
-     * `wayfinder_locales` action tag as their base route but with no
-     * `{locale}` placeholder left in their own URI — handing one to the
-     * resolver would throw under `strict`.
-     */
     private function isLocaleTwin(Route $route): bool
     {
         return $route->name() !== null && str_contains($route->name(), '.locale.');

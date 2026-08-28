@@ -8,12 +8,6 @@ use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
 
-/**
- * `{name}.locale.{locale}` has no reserved namespace: an app that happens to
- * already name a route that exact way would have it silently shadowed —
- * first registered wins, same exposure the pre-existing `.default` twin has.
- * Under `strict` (the default), that should be loud instead.
- */
 class LocalizedRouteNameCollisionTest extends TestCase
 {
     protected function defineEnvironment($app): void

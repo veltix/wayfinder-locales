@@ -10,19 +10,6 @@ use Laravel\Ranger\Components\Route as RangerRoute;
 use PHPUnit\Framework\Attributes\Test;
 use Veltix\WayfinderLocales\Route\LocaleRouteResolver;
 
-/**
- * Gap 1: `LocaleRouteResolver` computes the translated URL Wayfinder emits to
- * the client — `products.url({locale: 'de'})` becomes `/de/produkte` — but
- * nothing registers an inbound route that matches it. `SetLocale` only reads
- * the locale off whatever route already matched the request; it never
- * rewrites the incoming path. So the URL the package tells the client to
- * visit 404s.
- *
- * `SetLocaleMiddlewareTest` never caught this: it only ever requests the
- * untranslated `{locale}` URI Laravel already has registered
- * (`/de/products`), so it has never compared that against the URI the
- * package actually emits (`/de/produkte`).
- */
 class InboundRoutingTest extends TestCase
 {
     protected function defineEnvironment($app): void
@@ -38,8 +25,6 @@ class InboundRoutingTest extends TestCase
             ->name('products')
             ->localized(['en' => 'products', 'de' => 'produkte']);
 
-        // Never tagged with `.localized()` — stands in for Fortify's `login`,
-        // which `lroute()`'s docblock promises to leave unaffected.
         $router->get('/login', fn () => 'login')->name('login');
     }
 
@@ -49,28 +34,12 @@ class InboundRoutingTest extends TestCase
         $this->get('/de/produkte')->assertOk()->assertSee('de');
     }
 
-    /**
-     * Same property, asserted from the generator's side instead of a literal
-     * path. `resolvedUrlFor()` runs the exact computation
-     * `LocaleAwareRouteTransformer` uses to emit the client's
-     * `products.url({locale: 'de'})`, so if the translation map, the mode, or
-     * the segment ever change, this assertion follows them instead of
-     * silently testing a stale path.
-     */
     #[Test]
     public function it_matches_the_url_the_generator_emits_for_a_locale(): void
     {
         $this->get($this->resolvedUrlFor('products', 'de'))->assertOk()->assertSee('de');
     }
 
-    /**
-     * Gap 3: `lroute()` used to fill the locale parameter into the base route's
-     * own URI (`/de/products`) instead of consulting the resolver, so it never
-     * agreed with what the client is told to visit. Comparing against
-     * `resolvedUrlFor()` — the same computation the generator uses — rather
-     * than a literal path keeps this from drifting silently if the translation
-     * map, the mode, or the segment ever change.
-     */
     #[Test]
     public function lroute_generates_the_same_translated_url_the_resolver_produces(): void
     {
@@ -80,11 +49,6 @@ class InboundRoutingTest extends TestCase
         );
     }
 
-    /**
-     * The documented fallback: a route with no locale parameter has no
-     * `{name}.locale.{locale}` twin, so `lroute()` must fall through to
-     * `route()` unchanged instead of generating a broken name lookup.
-     */
     #[Test]
     public function lroute_leaves_a_route_without_a_locale_parameter_unchanged(): void
     {

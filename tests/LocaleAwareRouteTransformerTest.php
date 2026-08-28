@@ -10,14 +10,6 @@ use Laravel\Ranger\Components\Route as RangerRoute;
 use Laravel\Wayfinder\Converters\Routes as WayfinderRoutes;
 use PHPUnit\Framework\Attributes\Test;
 
-/**
- * `Route::localized()` registers a concrete twin route per locale
- * (`products.locale.de`) purely for inbound matching. Wayfinder's own route
- * converter has no idea those are plumbing: left unfiltered, it would emit a
- * separate named export for each one — growing with the locale count — on
- * top of the combined `products.url({ locale })` the base route already
- * produces.
- */
 class LocaleAwareRouteTransformerTest extends TestCase
 {
     protected function defineEnvironment($app): void

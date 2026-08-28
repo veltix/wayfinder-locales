@@ -10,15 +10,6 @@ use Laravel\Ranger\Components\Route as RangerRoute;
 use PHPUnit\Framework\Attributes\Test;
 use Veltix\WayfinderLocales\Route\LocaleRouteResolver;
 
-/**
- * `LocaleRouteResolver::findIlluminateRoute()` locates the Illuminate route
- * behind a `RangerRoute` wrapper two ways: by name, or — when the name
- * lookup table has not been refreshed yet — by comparing URIs. The second
- * path was unconditionally dead: `Laravel\Ranger\Components\Route::uri()`
- * always carries a leading slash, the native `Illuminate\Routing\Route::uri()`
- * never does, so the comparison could never match and the fallback silently
- * returned null instead of the route.
- */
 class LocaleRouteResolverTest extends TestCase
 {
     protected function defineEnvironment($app): void
@@ -33,10 +24,6 @@ class LocaleRouteResolverTest extends TestCase
         /** @var Router $router */
         $router = $this->app['router'];
 
-        // Registered after the app finished booting, so — unlike routes
-        // declared through `defineRoutes()` — nothing has refreshed the name
-        // lookup table for it. This reproduces the exact staleness the
-        // resolver's name-based lookup can hit.
         $route = $router->addRoute(['GET'], '{locale}/raeumlich', fn () => 'ok');
         $route->name('spatial');
 

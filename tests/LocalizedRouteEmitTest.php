@@ -15,23 +15,12 @@ use Veltix\WayfinderLocales\Route\LocaleRouteResolver;
 use Veltix\WayfinderLocales\Wayfinder\LocalizedRouteMethod;
 use Veltix\WayfinderLocales\Wayfinder\TypeScriptEmitterExtension;
 
-/**
- * The route half of the package. Wayfinder emits the TypeScript; this extension
- * substitutes a localized method for routes tagged with `Route::localized()`.
- *
- * These assertions also pin the package to Wayfinder's current `RouteMethod`
- * API. Without them the integration drifts silently: `RouteMethod` gained a
- * `$withInertiaComponent` constructor argument and every localized route
- * blew up with a TypeError that no test was watching for.
- */
 class LocalizedRouteEmitTest extends TestCase
 {
     protected function setUp(): void
     {
         parent::setUp();
 
-        // `wayfinder:generate` does this once per run; the registry is static,
-        // so it survives between tests in the same process.
         if (! ResultConverter::getRegistry()->hasConverter(TypeScriptConverter::class)) {
             ResultConverter::register(TypeScriptConverter::class);
         }
@@ -75,10 +64,6 @@ class LocalizedRouteEmitTest extends TestCase
         );
     }
 
-    /**
-     * The substitution has to keep Wayfinder's own placeholder replacement and
-     * query-string suffix, which hang off that return expression.
-     */
     #[Test]
     public function it_keeps_wayfinders_placeholder_replacement_and_query_params(): void
     {
@@ -97,9 +82,6 @@ class LocalizedRouteEmitTest extends TestCase
         $this->assertStringContainsString('product: string | number', $emitted);
     }
 
-    /**
-     * An omitted `{locale?}` would index the template table with `undefined`.
-     */
     #[Test]
     public function it_defaults_an_optional_locale_before_the_template_lookup(): void
     {

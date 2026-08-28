@@ -6,15 +6,6 @@ use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
-/**
- * Scans Laravel's lang/ directory into flat, dot-keyed catalogs per locale.
- *
- * - lang/{locale}/{group}.php   => nested arrays flattened to "group.nested.key"
- * - lang/{locale}.json          => flat string keys (key === source string)
- * - lang/vendor/{pkg}/{locale}  => "pkg::group.key"
- *
- * The default locale is the source of truth for the generated key set.
- */
 class TranslationCollector
 {
     public function __construct(
@@ -69,7 +60,6 @@ class TranslationCollector
     {
         $catalog = [];
 
-        // PHP group files: lang/{locale}/*.php
         $localeDir = $this->langPath.DIRECTORY_SEPARATOR.$locale;
 
         if ($this->files->isDirectory($localeDir)) {
@@ -101,7 +91,6 @@ class TranslationCollector
             }
         }
 
-        // JSON file: lang/{locale}.json
         $jsonFile = $this->langPath.DIRECTORY_SEPARATOR.$locale.'.json';
 
         if ($this->files->exists($jsonFile)) {
@@ -116,7 +105,6 @@ class TranslationCollector
             }
         }
 
-        // Vendor namespaces: lang/vendor/{package}/{locale}/*.php
         $vendorDir = $this->langPath.DIRECTORY_SEPARATOR.'vendor';
 
         if ($this->files->isDirectory($vendorDir)) {
@@ -157,8 +145,6 @@ class TranslationCollector
     }
 
     /**
-     * Extract unique `:placeholder` token names from a translation string.
-     *
      * @return list<string>
      */
     private function extractTokens(string $value): array

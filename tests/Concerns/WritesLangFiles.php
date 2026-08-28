@@ -6,10 +6,6 @@ namespace Veltix\WayfinderLocales\Tests\Concerns;
 
 use Illuminate\Filesystem\Filesystem;
 
-/**
- * Gives a test its own throwaway `lang/` tree plus a generation target, so the
- * command can be exercised end to end against real files on disk.
- */
 trait WritesLangFiles
 {
     protected string $workspace;
@@ -36,8 +32,6 @@ trait WritesLangFiles
     }
 
     /**
-     * `lang/` files to seed, keyed by path relative to the lang directory.
-     *
      * @return array<string, array<string, string>>
      */
     abstract protected function langFiles(): array;

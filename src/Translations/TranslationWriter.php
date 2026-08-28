@@ -7,17 +7,6 @@ use Illuminate\Support\Js;
 
 use function Illuminate\Filesystem\join_paths;
 
-/**
- * Emits the lazy, code-split frontend translation output:
- *   translations/{locale}.ts  - one flat catalog module per locale (own chunk)
- *   translations/keys.ts       - TranslationKey union + TranslationReplacements
- *   translations/locales.ts    - Locale union, locale list, active-locale store
- *   translations/index.ts      - t()/tChoice()/loadLocale() runtime + loader registry
- *
- * Everything lives under one directory the package owns end to end. Nothing is
- * written into `resources/js/wayfinder`: that directory belongs to
- * `wayfinder:generate`, which deletes any file there it did not write itself.
- */
 class TranslationWriter
 {
     public function __construct(
@@ -60,12 +49,6 @@ class TranslationWriter
     }
 
     /**
-     * The `Locale` union plus the active-locale store the runtime reads.
-     *
-     * On the `next` branch Wayfinder owns `wayfinder/index.ts` and exports no
-     * locale accessors, so the package ships its own here rather than patching
-     * a file it does not control.
-     *
      * @param  list<string>  $locales
      */
     private function localesModule(array $locales, string $default): string

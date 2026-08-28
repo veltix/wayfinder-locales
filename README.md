@@ -136,6 +136,14 @@ lroute('products');            // active locale
 lroute('products', [], 'de');  // "/de/produkte"
 ```
 
+`localized()` registers a concrete route per locale, named `{name}.locale.{locale}`, carrying
+that locale's translated segment. `lroute()` routes through the one for the locale you ask for,
+so what comes back is the translated URL rather than the base route's own URI with the locale
+parameter filled in.
+
+A route with **no** locale parameter is generated unchanged, so unprefixed routes — Fortify's
+`login`, say — keep working through the same call.
+
 ## Translations
 
 Point `locales` at your lang directories and generate:

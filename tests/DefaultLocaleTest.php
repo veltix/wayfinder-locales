@@ -12,11 +12,6 @@ use RuntimeException;
 use Veltix\WayfinderLocales\Route\LocaleRouteResolver;
 use Veltix\WayfinderLocales\Tests\Concerns\WritesLangFiles;
 
-/**
- * One config key, `wayfinder-locales.default_locale`, and both halves of the
- * package obey it. Before the merge each half read its own file — under
- * dev-next only one of those files was even loaded.
- */
 class DefaultLocaleTest extends TestCase
 {
     use WritesLangFiles;
@@ -59,10 +54,6 @@ class DefaultLocaleTest extends TestCase
             ->localized(['en' => 'products', 'de' => 'produkte']);
     }
 
-    /**
-     * The default locale's catalog seeds the whole key union; every other
-     * locale is looked up against it.
-     */
     #[Test]
     public function the_default_locale_seeds_the_translation_key_union(): void
     {
@@ -87,10 +78,6 @@ class DefaultLocaleTest extends TestCase
         );
     }
 
-    /**
-     * The same key drives route generation: the default locale is the one whose
-     * URL prefix `hide_default_prefix` drops.
-     */
     #[Test]
     public function the_default_locale_drives_route_url_generation(): void
     {
@@ -100,13 +87,6 @@ class DefaultLocaleTest extends TestCase
         $this->assertSame('/{locale}/products', $uris['en']);
     }
 
-    /**
-     * The bug this guards: the twin used to be built from the declared URI
-     * literal with the `{locale}` placeholder stripped, so it never consulted
-     * the translation map. With `default_locale => 'de'` and
-     * `['en' => 'products', 'de' => 'produkte']`, that served German at
-     * `/products` instead of `/produkte`.
-     */
     #[Test]
     public function the_default_locale_drives_the_unprefixed_route_registration(): void
     {
@@ -117,36 +97,18 @@ class DefaultLocaleTest extends TestCase
         $this->assertSame('de', $default->defaults['locale']);
     }
 
-    /**
-     * The round trip: the unprefixed twin must actually serve the default
-     * locale's translated segment...
-     */
     #[Test]
     public function the_unprefixed_route_resolves_at_the_default_locales_translated_segment(): void
     {
         $this->get('/produkte')->assertOk()->assertSee('de');
     }
 
-    /**
-     * ...and the old literal — what the twin used to be registered under —
-     * must stop resolving once the twin moves. Without this assertion, the
-     * test above would still pass if the twin were (incorrectly) registered
-     * under both `/produkte` and `/products`, which would leave a
-     * duplicate-content URL live on the site.
-     */
     #[Test]
     public function the_old_literal_no_longer_resolves_once_the_twin_moves(): void
     {
         $this->get('/products')->assertNotFound();
     }
 
-    /**
-     * The common case, and the one the consuming app actually runs in
-     * production: when the default locale's segment happens to equal the
-     * declared literal, the fix must not move it. Registered here with a
-     * distinct route name against a temporarily-swapped default_locale, since
-     * the class-level fixture's default is 'de'.
-     */
     #[Test]
     public function the_unprefixed_route_is_unmoved_when_the_default_segment_equals_the_literal(): void
     {
@@ -156,11 +118,6 @@ class DefaultLocaleTest extends TestCase
             ->name('products.english_default')
             ->localized(['en' => 'products', 'de' => 'produkte']);
 
-        // Routes named after being added to the collection (the twin is
-        // named this way, same as the route above it) only surface through
-        // `getByName()` once the name look-up table is rebuilt — Testbench
-        // does this itself after `defineRoutes()`, but a route registered
-        // mid-test has to trigger it explicitly.
         $this->app['router']->getRoutes()->refreshNameLookups();
 
         $default = $this->app['router']->getRoutes()->getByName('products.english_default.default');
@@ -180,13 +137,6 @@ class DefaultLocaleTest extends TestCase
             ->assertSuccessful();
     }
 
-    /**
-     * The callable form: `default_locale` may be a closure instead of a
-     * plain string, so a consuming app can source it from its own storage (a
-     * shop setting) rather than a static config value. The unprefixed twin
-     * must be built from whatever locale the closure resolves to, exactly as
-     * it would from a string.
-     */
     #[Test]
     public function a_closure_default_locale_drives_the_unprefixed_route_registration(): void
     {
@@ -205,13 +155,6 @@ class DefaultLocaleTest extends TestCase
         $this->assertSame('de', $default->defaults['locale']);
     }
 
-    /**
-     * Route registration happens once per app boot, but `Route::localized()`
-     * runs once per declared route — a real routes file might call it dozens
-     * of times. A closure backed by a database or a settings cache must not
-     * be invoked once per route: it's resolved once per registration pass
-     * and the result reused for the rest.
-     */
     #[Test]
     public function the_resolver_closure_is_invoked_once_per_registration_pass_not_once_per_route(): void
     {
@@ -236,13 +179,6 @@ class DefaultLocaleTest extends TestCase
         );
     }
 
-    /**
-     * The important case: route registration happens at boot, so if a
-     * consuming app's resolver hits a database that's briefly unavailable
-     * and throws, that must not take routing down with it. Resolution falls
-     * back to the first configured locale (`en`, from `['en', 'de']`) and
-     * registration completes.
-     */
     #[Test]
     public function a_throwing_resolver_falls_back_and_registration_still_completes(): void
     {
