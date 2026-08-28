@@ -134,7 +134,37 @@ git commit -m "feat: allow localized() without a locale placeholder in the URI"
 
 ---
 
-### Task 5: Document and release
+### Task 5: Make the emitted TypeScript compile, and prove it in the suite
+
+**Files:**
+- Modify: `src/Wayfinder/LocalizedRouteMethod.php`
+- Modify: `composer.json` / add a JS toolchain for the test harness
+- Create: a test that compiles generated output
+
+Verification against a real `tsc` found the emitted TypeScript **does not compile** — 8 errors across 3 files, for both declaration forms. Two root causes:
+
+1. **Missing `applyUrlDefaults` import** for a placeholder-free route with no other parameters.
+2. **A TypeScript narrowing failure:** `args?.locale`, used to index the per-locale template table, still types as `"en"|"de"|undefined` after the `fillOptionalLocale()` guard. Confirmed by a 12-line isolated repro.
+
+**Cause 2 also breaks the pre-existing `{locale?}` form** whenever `default_locale` is configured — the common case. This is not a regression from this branch; the package has been shipping non-compiling TypeScript.
+
+**Why the suite never saw it:** every emit test asserts string content with `toContain` and never compiles the output. That is nominal coverage again — the third instance in this repair, after the flat-route matrix and the hand-traced emitter.
+
+- [ ] **Step 1: Fix both causes, and write the isolated repro as a test first**
+
+- [ ] **Step 2: Make the suite compile what it emits**
+
+This is the structural fix and the point of the task. Reading generated TypeScript has failed three times here; only compiling it closes the loop. The mechanism is already proven — generate via testbench, then run `tsc --noEmit` over the output.
+
+Add whatever dev tooling that needs. A PHP package taking a node dev-dependency is unusual, but this package's primary consumer-facing artifact **is** TypeScript, and nothing has ever type-checked it.
+
+If the toolchain proves genuinely impractical here, say so with what you tried — and then the check has to live in the consuming app's gates instead, which is worse but honest.
+
+- [ ] **Step 3: Verify both forms compile, then run the full suite**
+
+---
+
+### Task 6: Document and release
 
 **Files:**
 - Modify: `README.md`
