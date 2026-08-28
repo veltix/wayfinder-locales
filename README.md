@@ -151,6 +151,44 @@ bound to `en`, so `/products` and `/en/products` both resolve. With `hide_defaul
 (the default), the default locale gets its own `products.locale.en` twin at `/en/products` instead,
 same as every other locale.
 
+### Root routes
+
+A route whose URI is `/` — usually your home page — can be localized too. There's no static
+segment to translate, so every locale's translation value must be an empty string:
+
+```php
+Route::get('/', [HomeController::class, 'index'])
+    ->name('home')
+    ->localized(['en' => '', 'de' => '']);
+```
+
+`localized()` treats the locale prefix itself as the whole localized path. This is the
+placeholder-free form, so it follows the same rule as above: the default locale is served by the
+declared route, unprefixed — `/` stays `/` — independently of `hide_default_prefix`, and every
+other locale gets a `home.locale.de`-style twin at `/de`. A non-empty translation value throws in
+strict mode; there's nothing to translate on a root route. Everything else — twin naming,
+`lroute()`, `home.url({ locale: 'de' })` — works exactly like any other localized route.
+
+### Model-bound routes
+
+Wayfinder's `{model:column}` shorthand carries `locale` through with it. Given:
+
+```php
+Route::get('/products/{product:slug}', [ProductController::class, 'show'])
+    ->name('products.show')
+    ->localized(['en' => 'products', 'de' => 'produkte']);
+```
+
+```ts
+products.show.url({ slug: 'red-mug', locale: 'de' }); // "/de/produkte/red-mug"
+```
+
+The shorthand rewrites its arguments down to the binding column alone before `localized()` ever
+sees them, but `localized()` preserves every sibling property — here, just `locale` — through
+that rewrite. There's no separate rule to remember for model-bound routes: `{ slug, locale }`
+returns the URL for the `locale` you passed, the same as `{ product: slug, locale }` would. If you
+previously wrote out the longer form as a workaround, you can drop it.
+
 However it's named, if a route already has that exact name, the new one is silently shadowed
 (first registered wins) unless `strict` is on, in which case registration throws instead. These
 per-locale twin routes exist purely for inbound matching; they are excluded from Wayfinder's
@@ -192,6 +230,27 @@ parameter filled in.
 
 A route with **no** locale parameter is generated unchanged, so unprefixed routes — Fortify's
 `login`, say — keep working through the same call.
+
+### `setUrlDefaults()` and SSR
+
+Every generated `url()` call reads locale from `args` first, but falls back to whatever Wayfinder's
+`setUrlDefaults()` has registered. That makes it tempting to set `locale` once instead of passing
+it everywhere:
+
+```ts
+import { setUrlDefaults } from '@/wayfinder';
+
+setUrlDefaults(() => ({ locale: currentLocale() }));
+```
+
+This is safe on the client — one request, one JS runtime. **It is not safe in code that runs
+under Inertia SSR.** `urlDefaults` is a single module-level variable in Wayfinder's generated
+runtime, and Inertia's SSR server has no per-request isolation: it's one Node process resolving
+however many concurrent renders are in flight, awaiting each page import along the way. Two
+renders for different locales can interleave, and the slower one silently inherits the other's
+locale — every URL on that page comes out in the wrong language, with no error and nothing to
+catch it. Pass `locale` explicitly (`lroute('products', [], locale)`, `products.url({ locale })`)
+in any code path that runs during SSR, rather than relying on `setUrlDefaults()` there.
 
 ## Translations
 
