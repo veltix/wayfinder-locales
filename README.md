@@ -84,6 +84,7 @@ return [
 | `mode` | `segment` replaces the first static slug segment after the locale. `tail` treats the translation as the whole localized path tail. |
 | `strict` | Throw on malformed `localized()` metadata instead of skipping the route. |
 | `locale_parameter` | The URI parameter carrying the locale. |
+| `strict_urls` | Generated helpers throw when a call omits `locale`, instead of falling back to `default_locale`. Off by default. |
 | `hide_default_prefix` | Register an unprefixed twin (`{name}.default`) for the default locale and emit its URL without the prefix. |
 | `exclude_groups` | Lang groups kept out of the frontend catalogs. |
 | `action_key` | Route action key `localized()` stashes its map under. Change only on a collision. |
@@ -231,26 +232,58 @@ parameter filled in.
 A route with **no** locale parameter is generated unchanged, so unprefixed routes — Fortify's
 `login`, say — keep working through the same call.
 
-### `setUrlDefaults()` and SSR
+### Binding the locale once, including under SSR
 
-Every generated `url()` call reads locale from `args` first, but falls back to whatever Wayfinder's
-`setUrlDefaults()` has registered. That makes it tempting to set `locale` once instead of passing
-it everywhere:
+Every generated `url()` reads `locale` from `args` first, then falls back to whatever Wayfinder's
+`setUrlDefaults()` has registered. Registering it once beats threading `locale` through every call
+site — but *where* you register it decides whether it is safe.
 
-```ts
-import { setUrlDefaults } from '@/wayfinder';
+`urlDefaults` is a single module-level variable in Wayfinder's generated runtime, and Inertia's SSR
+server is one Node process handling concurrent renders (`createServer` with a plain async handler;
+`cluster` defaults to `false`). So the write is shared across in-flight requests. What makes it safe
+is that Inertia's per-request render function has exactly **one** `await`, and everything after it
+is synchronous:
 
-setUrlDefaults(() => ({ locale: currentLocale() }));
+```js
+const initialComponent = await resolveComponent(page2.component, page2);  // the only await
+...
+reactApp2 = withApp(reactApp2, { ssr: true, page: page2 });                // register here
+const html = renderToString(reactApp2);                                   // synchronous
 ```
 
-This is safe on the client — one request, one JS runtime. **It is not safe in code that runs
-under Inertia SSR.** `urlDefaults` is a single module-level variable in Wayfinder's generated
-runtime, and Inertia's SSR server has no per-request isolation: it's one Node process resolving
-however many concurrent renders are in flight, awaiting each page import along the way. Two
-renders for different locales can interleave, and the slower one silently inherits the other's
-locale — every URL on that page comes out in the wrong language, with no error and nothing to
-catch it. Pass `locale` explicitly (`lroute('products', [], locale)`, `products.url({ locale })`)
-in any code path that runs during SSR, rather than relying on `setUrlDefaults()` there.
+Once that stretch begins, JavaScript's run-to-completion semantics mean no other request can run
+until `renderToString` returns. Register from `withApp` and each render reads its own locale:
+
+```tsx
+import { createInertiaApp, router } from '@inertiajs/react';
+import { setUrlDefaults } from '@/wayfinder';
+
+createInertiaApp({
+    withApp(app, ctx) {
+        setUrlDefaults(() => ({
+            locale: (ctx.ssr ? ctx.page : router.page).props.locale,
+        }));
+
+        return app;
+    },
+});
+```
+
+`setUrlDefaults()` takes a thunk, re-read on every `url()` call, so the client picks up
+`router.page` as it changes on each visit. On SSR, `ctx.page` is that request's own page. (On the
+very first client hydration `router.page` is not yet populated, so fall back to `ctx.page`.)
+
+**Registering it before the `await` is what breaks.** A slower render suspended on its page import
+resumes to find a faster render's locale already written, and every URL on that page comes out in
+the wrong language — no error, nothing to catch it. The same applies if you register from
+module scope, or from anywhere that can run while another render is suspended.
+
+This safety depends on `renderToString` staying synchronous. If you move to streaming SSR
+(`renderToPipeableStream`, React's `prerender`), the atomic window disappears — cover it with a
+test that renders two locales concurrently and asserts they do not cross.
+
+If you would rather not depend on that at all, set `strict_urls` and pass `locale` explicitly:
+generated helpers then throw when a call omits it instead of falling back to `default_locale`.
 
 ## Translations
 

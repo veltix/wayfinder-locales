@@ -20,6 +20,7 @@ final class LocalizedRouteMethod extends RouteMethod
         bool $tmpMethod = false,
         private readonly ?LocaleRouteMetadata $metadata = null,
         private readonly ?string $defaultLocale = null,
+        private readonly bool $strictUrls = false,
     ) {
         parent::__construct($route, $withForm, $withInertiaComponent, $named, $relatedRoutes, $tmpMethod);
 
@@ -202,15 +203,22 @@ final class LocalizedRouteMethod extends RouteMethod
 
         $anchor = "{$this->argsParam} = applyUrlDefaults({$this->argsParam})";
 
-        $fill = sprintf(
-            'if (%s?.%s === undefined) { %s = { ...(%s ?? {}), %s: "%s" } }',
-            $this->argsParam,
-            $this->metadata->localeParameter,
-            $this->argsParam,
-            $this->argsParam,
-            $this->metadata->localeParameter,
-            $this->defaultLocale,
-        );
+        $fill = $this->strictUrls
+            ? sprintf(
+                'if (%s?.%s === undefined) { throw new Error("[%s] was called without a locale. Register one with setUrlDefaults(), or pass it explicitly.") }',
+                $this->argsParam,
+                $this->metadata->localeParameter,
+                $this->metadata->routeName !== '' ? $this->metadata->routeName : $this->metadata->routeUri,
+            )
+            : sprintf(
+                'if (%s?.%s === undefined) { %s = { ...(%s ?? {}), %s: "%s" } }',
+                $this->argsParam,
+                $this->metadata->localeParameter,
+                $this->argsParam,
+                $this->argsParam,
+                $this->metadata->localeParameter,
+                $this->defaultLocale,
+            );
 
         return (string) preg_replace_callback(
             '/^([ \t]*)'.preg_quote($anchor, '/').'$/m',
