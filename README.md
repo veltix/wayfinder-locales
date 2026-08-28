@@ -19,7 +19,7 @@ build error rather than a string that renders as itself.
 ## Requirements
 
 - PHP 8.2+
-- Laravel 12 or 13
+- Laravel 13
 - `laravel/wayfinder: dev-next`
 
 ## Installation
@@ -40,10 +40,13 @@ The service provider is auto-discovered. On boot it registers:
 
 The two halves of the package are independent, and only one of them generates files.
 
-**Routes.** Laravel serves a single `{locale}`-parameterised URI. `Route::localized()` tags the
-route with a per-locale path segment map; at generation time the package's converter — bound over
-Wayfinder's `Converters\Routes` — turns that into a template table the generated function picks
-from. So localized routes come out of `wayfinder:generate`, not out of a second generator.
+**Routes.** `Route::localized()` tags the route with a per-locale path segment map and registers a
+concrete route per locale — `/de/produkte` alongside the original `{locale}`-parameterised
+`/en/products` — so the translated URLs the frontend actually visits are matched inbound by
+Laravel's own router, not just emitted outbound. At generation time the same metadata drives the
+package's converter — bound over Wayfinder's `Converters\Routes` — which turns it into a template
+table the generated function picks from. So localized routes come out of `wayfinder:generate`, not
+out of a second generator.
 
 **Translations.** `wayfinder-locales:generate` reads `lang/` and writes the frontend catalogs. It
 has nothing to do with routing and never writes into `resources/js/wayfinder` — that directory is
@@ -58,6 +61,7 @@ locale, shared by both halves.
 return [
     'locales' => ['en', 'de'],
     'default_locale' => env('WAYFINDER_DEFAULT_LOCALE', 'en'),
+    // 'default_locale' => fn () => Setting::get('locale', 'en'),
 
     'enabled' => env('WAYFINDER_LOCALES_ENABLED', true),
     'mode' => env('WAYFINDER_LOCALES_MODE', 'segment'),
@@ -74,7 +78,7 @@ return [
 | key | what it does |
 |---|---|
 | `locales` | Every locale generated for. Drives the `Locale` union, the catalog modules, and the locales `setlocale` will accept. |
-| `default_locale` | Seeds the `TranslationKey` union, is the runtime's fallback for a missing key, and is the locale whose URL prefix `hide_default_prefix` drops. Should be in `locales`. |
+| `default_locale` | Seeds the `TranslationKey` union, is the runtime's fallback for a missing key, and is the locale whose URL prefix `hide_default_prefix` drops. Should be in `locales`. Accepts a plain string or a `callable(): string` — resolved once per route-registration pass, not once per route, so it's safe to back with a database lookup or a settings cache. A throwing or empty-returning callable falls back to the first entry in `locales`. |
 | `enabled` | Turn off localized URL emission without unwinding your `Route::localized()` calls. |
 | `mode` | `segment` replaces the first static slug segment after the locale. `tail` treats the translation as the whole localized path tail. |
 | `strict` | Throw on malformed `localized()` metadata instead of skipping the route. |
@@ -112,6 +116,11 @@ has that exact name, the new one is silently shadowed (first registered wins) un
 on, in which case registration throws instead — the same exposure `products.default` already has.
 These per-locale routes exist purely for matching; they are excluded from Wayfinder's generated
 output, so they never produce a client-callable function of their own.
+
+Registering one route per locale multiplies your route table by the number of configured
+locales — a two-locale route becomes three entries (the original `{locale}`-parameterised route
+plus one concrete route per locale), visible in `php artisan route:list`. Fine at the route counts
+most apps have; worth knowing if you have both many routes and many locales.
 
 Then run Wayfinder as usual:
 
