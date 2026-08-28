@@ -53,16 +53,9 @@ final class LocaleRouteResolver
             return null;
         }
 
-        $translations = $this->normalizeTranslations($raw['translations']);
-
-        if ($translations === []) {
-            return $this->strict()
-                ? throw new InvalidArgumentException('The localized() translation map cannot be empty.')
-                : null;
-        }
-
         $uri = $route->uri();
-        [$hasLocaleParameter, $localeOptional] = $this->detectLocaleParameter($uri, $this->localeParameter());
+        $localeParameter = $this->localeParameter();
+        [$hasLocaleParameter, $localeOptional] = $this->detectLocaleParameter($uri, $localeParameter);
 
         $defaultLocale = $this->defaultLocale();
 
@@ -75,13 +68,25 @@ final class LocaleRouteResolver
             $resolutionUri = $this->withVirtualLocalePrefix($route, $uri);
         }
 
+        $isRoot = $this->isRootResolutionUri($resolutionUri, $localeParameter);
+
+        $translations = $this->normalizeTranslations($raw['translations'], $isRoot);
+
+        if ($translations === []) {
+            return $this->strict()
+                ? throw new InvalidArgumentException('The localized() translation map cannot be empty.')
+                : null;
+        }
+
         $mode = $this->mode();
 
-        $localizedUris = match ($mode) {
-            'segment' => $this->buildSegmentModeUris($resolutionUri, $this->localeParameter(), $translations, $hideDefault, $defaultLocale),
-            'tail' => $this->buildTailModeUris($resolutionUri, $this->localeParameter(), $translations, $hideDefault, $defaultLocale),
-            default => throw new InvalidArgumentException(sprintf('Unsupported wayfinder-locales mode [%s].', $mode)),
-        };
+        $localizedUris = $isRoot
+            ? $this->buildRootUris($resolutionUri, $translations, $hideDefault, $defaultLocale)
+            : match ($mode) {
+                'segment' => $this->buildSegmentModeUris($resolutionUri, $localeParameter, $translations, $hideDefault, $defaultLocale),
+                'tail' => $this->buildTailModeUris($resolutionUri, $localeParameter, $translations, $hideDefault, $defaultLocale),
+                default => throw new InvalidArgumentException(sprintf('Unsupported wayfinder-locales mode [%s].', $mode)),
+            };
 
         if ($localizedUris === []) {
             return null;
@@ -90,7 +95,7 @@ final class LocaleRouteResolver
         return new LocaleRouteMetadata(
             routeName: $route->getName() ?? '',
             routeUri: $uri,
-            localeParameter: $this->localeParameter(),
+            localeParameter: $localeParameter,
             localeOptional: $localeOptional,
             locales: array_values(array_keys($translations)),
             translations: $translations,
@@ -135,7 +140,7 @@ final class LocaleRouteResolver
      * @param  array<string, mixed>  $translations
      * @return array<string, string>
      */
-    private function normalizeTranslations(array $translations): array
+    private function normalizeTranslations(array $translations, bool $allowEmpty = false): array
     {
         $normalized = [];
 
@@ -148,12 +153,24 @@ final class LocaleRouteResolver
                 continue;
             }
 
-            if (! is_string($value) || trim($value) === '') {
+            if (! is_string($value)) {
                 if ($this->strict()) {
                     throw new InvalidArgumentException(sprintf(
-                        'Translation value for locale [%s] must be a non-empty string.',
+                        'Translation value for locale [%s] must be a string.',
                         $locale,
                     ));
+                }
+
+                continue;
+            }
+
+            $isEmpty = trim($value) === '';
+
+            if ($allowEmpty ? ! $isEmpty : $isEmpty) {
+                if ($this->strict()) {
+                    throw new InvalidArgumentException($allowEmpty
+                        ? sprintf('Translation value for locale [%s] on a root route must be an empty string: the locale prefix is the entire localized path, there is nothing to translate.', $locale)
+                        : sprintf('Translation value for locale [%s] must be a non-empty string.', $locale));
                 }
 
                 continue;
@@ -204,6 +221,32 @@ final class LocaleRouteResolver
         return $localUri === ''
             ? $groupPrefix.'/'.$localePlaceholder
             : $groupPrefix.'/'.$localePlaceholder.'/'.$localUri;
+    }
+
+    private function isRootResolutionUri(string $resolutionUri, string $localeParameter): bool
+    {
+        $trimmed = trim($resolutionUri, '/');
+
+        return $trimmed === '{'.$localeParameter.'}' || $trimmed === '{'.$localeParameter.'?}';
+    }
+
+    /**
+     * @param  array<string, string>  $translations
+     * @return array<string, string>
+     */
+    private function buildRootUris(string $resolutionUri, array $translations, bool $hideDefault, ?string $defaultLocale): array
+    {
+        $placeholder = trim($resolutionUri, '/');
+
+        $output = [];
+
+        foreach (array_keys($translations) as $locale) {
+            $output[$locale] = $hideDefault && $defaultLocale === $locale
+                ? '/'
+                : '/'.$placeholder;
+        }
+
+        return $output;
     }
 
     /**

@@ -101,6 +101,7 @@ final class LocalizedRouteMethod extends RouteMethod
         $url = $this->preserveSiblingArgsThroughModelBoundShorthand($url);
         $url = $this->fillOptionalLocale($url);
         $url = $this->stripUnusedParsedArgsForRouteWithNoRealParameters($url);
+        $url = $this->preventTrailingSlashStripFromErasingRootUrl($url);
 
         $routeCarriesLocale = $this->routeHasLocaleParameter();
 
@@ -168,6 +169,15 @@ final class LocalizedRouteMethod extends RouteMethod
         $spread = sprintf('%s = { ...%s, %s: %s }', $this->argsParam, $this->argsParam, $parameter->name, $keyValue);
 
         return str_replace($rebuild, $spread, $url);
+    }
+
+    private function preventTrailingSlashStripFromErasingRootUrl(string $url): string
+    {
+        return str_replace(
+            '.replace(/\/+$/, "")',
+            '.replace(/(.)\/+$/, "$1")',
+            $url,
+        );
     }
 
     private function stripUnusedParsedArgsForRouteWithNoRealParameters(string $url): string
