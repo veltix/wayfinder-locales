@@ -2,54 +2,49 @@
 
 declare(strict_types=1);
 
-namespace Veltix\WayfinderLocales\Tests;
-
+use Illuminate\Foundation\Application;
 use Illuminate\Routing\Route as IlluminateRoute;
+use Illuminate\Routing\Router;
 use Illuminate\Support\Collection;
 use Laravel\Ranger\Components\Route as RangerRoute;
 use Laravel\Wayfinder\Converters\Routes as WayfinderRoutes;
-use PHPUnit\Framework\Attributes\Test;
 
-class LocaleAwareRouteTransformerTest extends TestCase
+use function Orchestra\Testbench\Pest\defineEnvironment;
+use function Orchestra\Testbench\Pest\defineRoutes;
+
+defineEnvironment(function (Application $app): void {
+    $app['config']->set('wayfinder-locales.locales', ['en', 'de']);
+    $app['config']->set('wayfinder-locales.default_locale', 'en');
+});
+
+defineRoutes(function (Router $router): void {
+    $router->get('/{locale?}/products', fn () => 'ok')
+        ->name('products')
+        ->localized(['en' => 'products', 'de' => 'produkte']);
+});
+
+function rangerRouteNamed(string $name): RangerRoute
 {
-    protected function defineEnvironment($app): void
-    {
-        $app['config']->set('wayfinder-locales.locales', ['en', 'de']);
-        $app['config']->set('wayfinder-locales.default_locale', 'en');
-    }
+    /** @var IlluminateRoute $route */
+    $route = app('router')->getRoutes()->getByName($name);
 
-    protected function defineRoutes($router): void
-    {
-        $router->get('/{locale?}/products', fn () => 'ok')
-            ->name('products')
-            ->localized(['en' => 'products', 'de' => 'produkte']);
-    }
-
-    #[Test]
-    public function it_does_not_emit_a_separate_export_for_each_per_locale_route(): void
-    {
-        $routes = new Collection([
-            $this->rangerRoute('products'),
-            $this->rangerRoute('products.locale.en'),
-            $this->rangerRoute('products.locale.de'),
-        ]);
-
-        $results = $this->app->make(WayfinderRoutes::class)->convert($routes);
-
-        $content = collect($results)->map(fn ($result) => $result->content())->implode(PHP_EOL);
-
-        $this->assertStringContainsString('productsLocalizedTemplates', $content);
-        $this->assertStringNotContainsString('ProductsLocaleDe', $content);
-        $this->assertStringNotContainsString('ProductsLocaleEn', $content);
-        $this->assertStringNotContainsString('productsLocaleDe', $content);
-        $this->assertStringNotContainsString('productsLocaleEn', $content);
-    }
-
-    private function rangerRoute(string $name): RangerRoute
-    {
-        /** @var IlluminateRoute $route */
-        $route = $this->app['router']->getRoutes()->getByName($name);
-
-        return new RangerRoute($route, new Collection, null, null);
-    }
+    return new RangerRoute($route, new Collection, null, null);
 }
+
+it('does not emit a separate export for each per locale route', function (): void {
+    $routes = new Collection([
+        rangerRouteNamed('products'),
+        rangerRouteNamed('products.locale.en'),
+        rangerRouteNamed('products.locale.de'),
+    ]);
+
+    $results = $this->app->make(WayfinderRoutes::class)->convert($routes);
+
+    $content = collect($results)->map(fn ($result) => $result->content())->implode(PHP_EOL);
+
+    expect($content)->toContain('productsLocalizedTemplates');
+    expect($content)->not->toContain('ProductsLocaleDe');
+    expect($content)->not->toContain('ProductsLocaleEn');
+    expect($content)->not->toContain('productsLocaleDe');
+    expect($content)->not->toContain('productsLocaleEn');
+});
