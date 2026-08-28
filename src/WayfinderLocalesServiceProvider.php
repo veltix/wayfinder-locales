@@ -143,6 +143,7 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
 
                 $defaultRoute = $withoutGroupStack($router, fn (): IlluminateRoute => $router->addRoute($methods, $unprefixedUri, $routeAction));
                 $defaultRoute->setBindingFields($this->bindingFields());
+                $defaultRoute->setWheres($this->wheres);
                 $defaultRoute->defaults($localeParameter, $defaultLocale);
 
                 if ($this->getName() !== null) {
@@ -209,6 +210,7 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
 
                     $localeRoute = $withoutGroupStack($router, fn (): IlluminateRoute => $router->addRoute($methods, $concreteUri, $routeAction));
                     $localeRoute->setBindingFields($this->bindingFields());
+                    $localeRoute->setWheres($this->wheres);
                     $localeRoute->defaults($localeParameter, $locale);
 
                     if ($localeRouteName !== null) {
