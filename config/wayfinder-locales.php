@@ -84,6 +84,8 @@ return [
     |
     */
 
+    'strict_urls' => env('WAYFINDER_LOCALES_STRICT_URLS', false),
+
     'hide_default_prefix' => env('WAYFINDER_HIDE_DEFAULT_PREFIX', false),
 
     /*

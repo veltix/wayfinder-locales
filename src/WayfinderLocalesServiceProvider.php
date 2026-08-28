@@ -153,6 +153,12 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
                     $defaultRoute->withoutMiddleware($middleware);
                 }
             } elseif (! $hasLocalePlaceholder && is_string($defaultLocale) && $defaultLocale !== '') {
+                $defaultUri = $metadata?->uriForLocale($defaultLocale);
+
+                if ($defaultUri !== null && trim($defaultUri, '/') !== trim($this->uri(), '/')) {
+                    $this->setUri(trim($defaultUri, '/'));
+                }
+
                 $this->defaults($localeParameter, $defaultLocale);
             }
 

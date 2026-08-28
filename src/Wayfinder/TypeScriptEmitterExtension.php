@@ -55,6 +55,7 @@ final class TypeScriptEmitterExtension
             relatedRoutes: $relatedRoutes,
             metadata: $metadata,
             defaultLocale: $this->defaultLocale(),
+            strictUrls: (bool) config('wayfinder-locales.strict_urls', false),
         );
     }
 
