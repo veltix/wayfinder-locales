@@ -175,7 +175,7 @@ class TranslationWriter
         import { setUrlDefaults } from '../wayfinder';
 
         import type { Page } from '@inertiajs/core';
-        import type { ReactNode } from 'react';
+        import type { ReactElement } from 'react';
 
         type WithApp = { ssr: boolean; page: Page };
 
@@ -197,8 +197,8 @@ class TranslationWriter
          * so ctx.page covers that render.
          */
         export function bindLocale(
-            wrap: (app: ReactNode) => ReactNode = (app) => app,
-        ): (app: ReactNode, ctx: WithApp) => ReactNode {
+            wrap: (app: ReactElement) => ReactElement = (app) => app,
+        ): (app: ReactElement, ctx: WithApp) => ReactElement {
             return (app, ctx) => {
                 setUrlDefaults(() => ({
                     locale:
