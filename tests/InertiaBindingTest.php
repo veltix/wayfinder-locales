@@ -43,6 +43,16 @@ it('emits the binding when the flag is on', function (): void {
         ->toContain('setUrlDefaults');
 });
 
+it('matches the ReactWithApp signature Inertia expects', function (): void {
+    config()->set('wayfinder-locales.inertia_binding', true);
+
+    $this->artisan('wayfinder-locales:generate', ['--path' => $this->output])->assertSuccessful();
+
+    expect($this->generated('translations/inertia.ts'))
+        ->toContain('ReactElement')
+        ->not->toContain('ReactNode');
+});
+
 it('reads the live page on the client and the request page under SSR', function (): void {
     config()->set('wayfinder-locales.inertia_binding', true);
 
