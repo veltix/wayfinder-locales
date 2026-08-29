@@ -84,6 +84,7 @@ return [
 | `mode` | `segment` replaces the first static slug segment after the locale. `tail` treats the translation as the whole localized path tail. |
 | `strict` | Throw on malformed `localized()` metadata instead of skipping the route. |
 | `locale_parameter` | The URI parameter carrying the locale. |
+| `inertia_binding` | Emit `translations/inertia.ts` with a `bindLocale()` helper for Inertia's `withApp`. Off by default; the module imports `@inertiajs/react`. |
 | `strict_urls` | Generated helpers throw when a call omits `locale`, instead of falling back to `default_locale`. Off by default. |
 | `hide_default_prefix` | Register an unprefixed twin (`{name}.default`) for the default locale and emit its URL without the prefix. |
 | `exclude_groups` | Lang groups kept out of the frontend catalogs. |
@@ -268,6 +269,22 @@ createInertiaApp({
     },
 });
 ```
+
+Set `inertia_binding` and the package writes that for you, including the
+first-hydration fallback and the cast to `router.page`, which is a real
+property but not part of Inertia's published `Router` type:
+
+```tsx
+import { bindLocale } from '@/translations/inertia';
+
+createInertiaApp({
+    withApp: bindLocale((app) => <TooltipProvider>{app}</TooltipProvider>),
+});
+```
+
+It is off by default: the module imports `@inertiajs/react`, so emitting it
+unconditionally would break the type-check of a consumer that does not use
+Inertia.
 
 `setUrlDefaults()` takes a thunk, re-read on every `url()` call, so the client picks up
 `router.page` as it changes on each visit. On SSR, `ctx.page` is that request's own page. (On the
