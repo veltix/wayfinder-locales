@@ -81,7 +81,7 @@ return [
 | `locales` | Every locale generated for. Drives the `Locale` union, the catalog modules, and the locales `setlocale` will accept. |
 | `default_locale` | Seeds the `TranslationKey` union, is the runtime's fallback for a missing key, and is the locale whose URL prefix `hide_default_prefix` drops. Should be in `locales`. Accepts a plain string or a `callable(): string` — resolved once per route-registration pass, not once per route, so it's safe to back with a database lookup or a settings cache. A throwing or empty-returning callable falls back to the first entry in `locales`. |
 | `enabled` | Turn off localized URL emission without unwinding your `Route::localized()` calls. |
-| `mode` | `segment` replaces the first static slug segment after the locale. `tail` treats the translation as the whole localized path tail. |
+| `mode` | `segment` replaces the first static slug segment after the locale; a translation that names several segments (`'konto/profiil'`, `'tellimused/{order}/vaata'`) replaces the whole path after the locale instead, as `tail` does. `tail` treats every translation as the whole localized path tail. |
 | `strict` | Throw on malformed `localized()` metadata instead of skipping the route. |
 | `locale_parameter` | The URI parameter carrying the locale. |
 | `inertia_binding` | Emit `translations/inertia.ts` with a `bindLocale()` helper for Inertia's `withApp`. Off by default; the module imports `@inertiajs/react`. |

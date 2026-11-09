@@ -272,6 +272,12 @@ final class LocaleRouteResolver
         $output = [];
 
         foreach ($translations as $locale => $translatedSegment) {
+            if (str_contains($translatedSegment, '/')) {
+                $output += $this->buildTailModeUris($uri, $localeParameter, [$locale => $translatedSegment], $hideDefault, $defaultLocale);
+
+                continue;
+            }
+
             $localized = $segments;
             $localized[$targetIndex] = $translatedSegment;
 
