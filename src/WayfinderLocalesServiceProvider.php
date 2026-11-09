@@ -157,7 +157,10 @@ class WayfinderLocalesServiceProvider extends ServiceProvider
                 $defaultUri = $metadata?->uriForLocale($defaultLocale);
 
                 if ($defaultUri !== null && trim($defaultUri, '/') !== trim($this->uri(), '/')) {
+                    $bindingFields = $this->bindingFields();
+
                     $this->setUri(trim($defaultUri, '/'));
+                    $this->setBindingFields($bindingFields);
                 }
 
                 $this->defaults($localeParameter, $defaultLocale);
